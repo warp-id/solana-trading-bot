@@ -114,6 +114,7 @@ export async function getAccountPoolKeysFromAccountDataV4(
     marketEventQueue: minimalMarketData.eventQueue,
     withdrawQueue: accountData.withdrawQueue,
     lpVault: accountData.lpVault,
+    lookupTableAccount: PublicKey.default,
   };
 }
 
@@ -129,6 +130,7 @@ export async function getTokenAccounts(
   for (const { pubkey, account } of tokenResp.value) {
     accounts.push({
       pubkey,
+      programId: account.owner,
       accountInfo: SPL_ACCOUNT_LAYOUT.decode(account.data),
     });
   }

@@ -9,6 +9,7 @@ import {
   publicKey,
   struct,
   MAINNET_PROGRAM_ID,
+  LiquidityStateV4,
 } from '@raydium-io/raydium-sdk';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { USDC_TOKEN_ID } from '../common';
@@ -68,7 +69,7 @@ export async function getAllAccountsV4(
 export async function getAccountPoolKeysFromAccountDataV4(
   connection: Connection,
   id: PublicKey,
-  accountData: any,
+  accountData: LiquidityStateV4,
   commitment?: Commitment,
 ): Promise<LiquidityPoolKeys> {
   const marketInfo = await connection.getAccountInfo(accountData.marketId, {

@@ -1,6 +1,7 @@
 import {
   Liquidity,
   LIQUIDITY_STATE_LAYOUT_V4,
+  LiquidityStateV4,
   MARKET_STATE_LAYOUT_V2,
 } from '@raydium-io/raydium-sdk';
 import { getOrCreateAssociatedTokenAccount } from '@solana/spl-token';
@@ -26,12 +27,32 @@ import { USDC_AMOUNT, USDC_TOKEN_ID } from './common';
 import { getAllMarketsV3 } from './market';
 import pino from 'pino';
 
+const transport = pino.transport({
+  targets: [
+    {
+      level: 'trace',
+      target: 'pino/file',
+      options: {
+        destination: 'buy.log',
+      },
+    },
+    {
+      level: 'trace',
+      target: 'pino-pretty',
+      options: {},
+    },
+  ],
+});
+
 export const logger = pino(
   {
     redact: ['poolKeys'],
+    serializers: {
+      error: pino.stdSerializers.err
+    },
     base: undefined,
   },
-  pino.destination('buy.log'),
+  transport,
 );
 
 const network = 'mainnet-beta';
@@ -88,7 +109,7 @@ async function init(): Promise<void> {
 }
 
 export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
-  let accountData: any;
+  let accountData: LiquidityStateV4 | undefined;
   try {
     accountData = LIQUIDITY_STATE_LAYOUT_V4.decode(
       updatedAccountInfo.accountInfo.data,

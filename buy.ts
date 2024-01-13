@@ -29,6 +29,7 @@ import pino from 'pino';
 
 const transport = pino.transport({
   targets: [
+    /*
     {
       level: 'trace',
       target: 'pino/file',
@@ -36,6 +37,7 @@ const transport = pino.transport({
         destination: 'buy.log',
       },
     },
+    */
     {
       level: 'trace',
       target: 'pino-pretty',

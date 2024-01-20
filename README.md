@@ -12,9 +12,6 @@ In order to run the script you need to:
 - Transfer some SOL to it.
 - Convert some SOL to USDC.
   - We need USDC because the script is buying USDC pairs.
-- Set your Private Key in the .env file (remove the .copy from the file name when done)
-- Modify the buy.ts file and enter your RPC endpoint
-  - Find line where it says: `ENTER RPC ENDPOINT HERE` and `ENTER RPC WEBSOCKET ENDPOINT HERE`
-    and replace it with your endpoint
+- Set your PRIVATE_KEY, RPC_ENDPOINT and RPC_WEBSOCKET_ENDPOINT in the .env file (remove the .copy from the file name when done)
 - Install dependencies by typing: `npm install`
 - Run the script by typing: `npm run buy` in terminal

@@ -83,10 +83,6 @@ let usdcTokenKey: PublicKey;
 const PRIVATE_KEY = retrieveEnvVariable('PRIVATE_KEY', logger);
 
 async function init(): Promise<void> {
-  if (!PRIVATE_KEY) {
-      logger.error('PRIVATE_KEY is not set');
-      process.exit(1);
-  }
   wallet = Keypair.fromSecretKey(bs58.decode(PRIVATE_KEY));
   logger.info(`Wallet Address: ${wallet.publicKey.toString()}`);
   const allLiquidityPools = await getAllAccountsV4(solanaConnection);

@@ -21,13 +21,11 @@ import {
   RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
   OPENBOOK_PROGRAM_ID,
 } from './liquidity';
-import { retry } from './utils';
+import { retry, retrieveEnvVariable } from './utils';
 import { USDC_AMOUNT, USDC_TOKEN_ID } from './common';
 import { getAllMarketsV3 } from './market';
 import pino from 'pino';
-import dotenv from 'dotenv';
 import bs58 from "bs58";
-dotenv.config();
 
 const transport = pino.transport({
   targets: [
@@ -60,12 +58,16 @@ export const logger = pino(
 );
 
 const network = 'mainnet-beta';
+const RPC_ENDPOINT = retrieveEnvVariable('RPC_ENDPOINT', logger);
+const RPC_WEBSOCKET_ENDPOINT = retrieveEnvVariable('RPC_WEBSOCKET_ENDPOINT', logger);
+
+if (!RPC_ENDPOINT || !RPC_WEBSOCKET_ENDPOINT) {
+  logger.error('RPC_ENDPOINT / RPC_WEBSOCKET_ENDPOINT is not set');
+  process.exit(1);
+}
 const solanaConnection = new Connection(
-  'ENTER RPC ENDPOINT HERE',
-  {
-    wsEndpoint:
-     'ENTER RPC WEBSOCKET ENDPOINT HERE',
-  },
+  RPC_ENDPOINT,
+  {wsEndpoint: RPC_WEBSOCKET_ENDPOINT},
 );
 
 export type MinimalTokenAccountData = {
@@ -82,11 +84,11 @@ let existingTokenAccounts: Map<string, MinimalTokenAccountData> = new Map<
 
 let wallet: Keypair;
 let usdcTokenKey: PublicKey;
-const PRIVATE_KEY: string = process.env.PRIVATE_KEY || '';
+const PRIVATE_KEY = retrieveEnvVariable('PRIVATE_KEY', logger);
 
 async function init(): Promise<void> {
   if (!PRIVATE_KEY) {
-      console.error('PRIVATE_KEY is not set');
+      logger.error('PRIVATE_KEY is not set');
       process.exit(1);
   }
   wallet = Keypair.fromSecretKey(bs58.decode(PRIVATE_KEY));

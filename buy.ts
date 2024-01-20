@@ -61,10 +61,6 @@ const network = 'mainnet-beta';
 const RPC_ENDPOINT = retrieveEnvVariable('RPC_ENDPOINT', logger);
 const RPC_WEBSOCKET_ENDPOINT = retrieveEnvVariable('RPC_WEBSOCKET_ENDPOINT', logger);
 
-if (!RPC_ENDPOINT || !RPC_WEBSOCKET_ENDPOINT) {
-  logger.error('RPC_ENDPOINT / RPC_WEBSOCKET_ENDPOINT is not set');
-  process.exit(1);
-}
 const solanaConnection = new Connection(
   RPC_ENDPOINT,
   {wsEndpoint: RPC_WEBSOCKET_ENDPOINT},

@@ -14,7 +14,6 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
-import secret from './wallet.json';
 import {
   getAllAccountsV4,
   getTokenAccounts,
@@ -26,6 +25,9 @@ import { retry } from './utils';
 import { USDC_AMOUNT, USDC_TOKEN_ID } from './common';
 import { getAllMarketsV3 } from './market';
 import pino from 'pino';
+import dotenv from 'dotenv';
+import bs58 from "bs58";
+dotenv.config();
 
 const transport = pino.transport({
   targets: [
@@ -80,9 +82,14 @@ let existingTokenAccounts: Map<string, MinimalTokenAccountData> = new Map<
 
 let wallet: Keypair;
 let usdcTokenKey: PublicKey;
+const PRIVATE_KEY: string = process.env.PRIVATE_KEY || '';
 
 async function init(): Promise<void> {
-  wallet = Keypair.fromSecretKey(new Uint8Array(secret));
+  if (!PRIVATE_KEY) {
+      console.error('PRIVATE_KEY is not set');
+      process.exit(1);
+  }
+  wallet = Keypair.fromSecretKey(bs58.decode(PRIVATE_KEY));
   logger.info(`Wallet Address: ${wallet.publicKey.toString()}`);
   const allLiquidityPools = await getAllAccountsV4(solanaConnection);
   existingLiquidityPools = new Set(

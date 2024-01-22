@@ -25,7 +25,7 @@ import { retry, retrieveEnvVariable } from './utils';
 import { USDC_AMOUNT, USDC_TOKEN_ID } from './common';
 import { getAllMarketsV3 } from './market';
 import pino from 'pino';
-import bs58 from "bs58";
+import bs58 from 'bs58';
 
 const transport = pino.transport({
   targets: [
@@ -50,7 +50,7 @@ export const logger = pino(
   {
     redact: ['poolKeys'],
     serializers: {
-      error: pino.stdSerializers.err
+      error: pino.stdSerializers.err,
     },
     base: undefined,
   },
@@ -59,12 +59,14 @@ export const logger = pino(
 
 const network = 'mainnet-beta';
 const RPC_ENDPOINT = retrieveEnvVariable('RPC_ENDPOINT', logger);
-const RPC_WEBSOCKET_ENDPOINT = retrieveEnvVariable('RPC_WEBSOCKET_ENDPOINT', logger);
-
-const solanaConnection = new Connection(
-  RPC_ENDPOINT,
-  {wsEndpoint: RPC_WEBSOCKET_ENDPOINT},
+const RPC_WEBSOCKET_ENDPOINT = retrieveEnvVariable(
+  'RPC_WEBSOCKET_ENDPOINT',
+  logger,
 );
+
+const solanaConnection = new Connection(RPC_ENDPOINT, {
+  wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
+});
 
 export type MinimalTokenAccountData = {
   mint: PublicKey;
@@ -168,14 +170,20 @@ async function buy(accountId: PublicKey, accountData: any): Promise<void> {
     solanaConnection.getLatestBlockhash({ commitment: 'processed' }),
   ]);
 
+  const baseMint = poolKeys.baseMint.toString();
+  const tokenAccountOut =
+    existingTokenAccounts && existingTokenAccounts.get(baseMint)?.address;
+
+  if (!tokenAccountOut) {
+    logger.info(`No token account for ${baseMint}`);
+    return;
+  }
   const { innerTransaction, address } = Liquidity.makeSwapFixedInInstruction(
     {
       poolKeys,
       userKeys: {
         tokenAccountIn: usdcTokenKey,
-        tokenAccountOut: existingTokenAccounts.get(
-          poolKeys.baseMint.toString(),
-        )!.address,
+        tokenAccountOut: tokenAccountOut,
         owner: wallet.publicKey,
       },
       amountIn: USDC_AMOUNT * 1000000,

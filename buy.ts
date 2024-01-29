@@ -14,7 +14,6 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
-import secret from './wallet.json';
 import {
   getAllAccountsV4,
   getTokenAccounts,
@@ -22,10 +21,11 @@ import {
   RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
   OPENBOOK_PROGRAM_ID,
 } from './liquidity';
-import { retry } from './utils';
+import { retry, retrieveEnvVariable } from './utils';
 import { USDC_AMOUNT, USDC_TOKEN_ID } from './common';
 import { getAllMarketsV3 } from './market';
 import pino from 'pino';
+import bs58 from 'bs58';
 
 const transport = pino.transport({
   targets: [
@@ -50,7 +50,7 @@ export const logger = pino(
   {
     redact: ['poolKeys'],
     serializers: {
-      error: pino.stdSerializers.err
+      error: pino.stdSerializers.err,
     },
     base: undefined,
   },
@@ -58,13 +58,15 @@ export const logger = pino(
 );
 
 const network = 'mainnet-beta';
-const solanaConnection = new Connection(
-  'ENTER RPC ENDPOINT HERE',
-  {
-    wsEndpoint:
-     'ENTER RPC WEBSOCKET ENDPOINT HERE',
-  },
+const RPC_ENDPOINT = retrieveEnvVariable('RPC_ENDPOINT', logger);
+const RPC_WEBSOCKET_ENDPOINT = retrieveEnvVariable(
+  'RPC_WEBSOCKET_ENDPOINT',
+  logger,
 );
+
+const solanaConnection = new Connection(RPC_ENDPOINT, {
+  wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
+});
 
 export type MinimalTokenAccountData = {
   mint: PublicKey;
@@ -80,9 +82,10 @@ let existingTokenAccounts: Map<string, MinimalTokenAccountData> = new Map<
 
 let wallet: Keypair;
 let usdcTokenKey: PublicKey;
+const PRIVATE_KEY = retrieveEnvVariable('PRIVATE_KEY', logger);
 
 async function init(): Promise<void> {
-  wallet = Keypair.fromSecretKey(new Uint8Array(secret));
+  wallet = Keypair.fromSecretKey(bs58.decode(PRIVATE_KEY));
   logger.info(`Wallet Address: ${wallet.publicKey.toString()}`);
   const allLiquidityPools = await getAllAccountsV4(solanaConnection);
   existingLiquidityPools = new Set(
@@ -167,14 +170,20 @@ async function buy(accountId: PublicKey, accountData: any): Promise<void> {
     solanaConnection.getLatestBlockhash({ commitment: 'processed' }),
   ]);
 
+  const baseMint = poolKeys.baseMint.toString();
+  const tokenAccountOut =
+    existingTokenAccounts && existingTokenAccounts.get(baseMint)?.address;
+
+  if (!tokenAccountOut) {
+    logger.info(`No token account for ${baseMint}`);
+    return;
+  }
   const { innerTransaction, address } = Liquidity.makeSwapFixedInInstruction(
     {
       poolKeys,
       userKeys: {
         tokenAccountIn: usdcTokenKey,
-        tokenAccountOut: existingTokenAccounts.get(
-          poolKeys.baseMint.toString(),
-        )!.address,
+        tokenAccountOut: tokenAccountOut,
         owner: wallet.publicKey,
       },
       amountIn: USDC_AMOUNT * 1000000,

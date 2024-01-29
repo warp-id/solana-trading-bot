@@ -9,6 +9,8 @@
     "@solana/spl-token": "^0.3.11",
     "bigint-buffer": "^1.1.5",
     "bn.js": "^5.2.1",
+    "bs58": "^5.0.0",
+    "dotenv": "^16.3.2",
     "pino": "^8.17.2",
     "pino-pretty": "^10.3.1",
     "pino-std-serializers": "^6.2.2"

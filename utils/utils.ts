@@ -1,3 +1,7 @@
+import { Logger } from "pino";
+import dotenv from 'dotenv';
+dotenv.config();
+
 /**
  * Runs the function `fn`
  * and retries automatically if it fails.
@@ -23,3 +27,12 @@ export const retry = async <T>(
 };
 
 export const sleep = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export const retrieveEnvVariable = (variableName: string, logger: Logger) => {
+    const variable = process.env[variableName] || '';
+    if (!variable) {
+      logger.error(`${variableName} is not set`);
+      process.exit(1);
+    }
+    return variable;
+}

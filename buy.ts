@@ -248,6 +248,12 @@ const runListener = async () => {
           bytes: OPENBOOK_PROGRAM_ID.toBase58(),
         },
       },
+      {
+        memcmp: {
+          offset: LIQUIDITY_STATE_LAYOUT_V4.offsetOf('status'),
+          bytes: '14421D35quxec7'
+        },
+      },
     ],
   );
 

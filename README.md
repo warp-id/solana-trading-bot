@@ -12,9 +12,9 @@ In order to run the script you need to:
   - You need USDC or WSOL depending on configuration set below.
 - Set your 
   - PRIVATE_KEY (your wallet private key)
-  - RPC_ENDPOINT (https endpoint like helius/quicknode)
-  - RPC_WEBSOCKET_ENDPOINT (websocket endpoint like helius/quicknode)
-  - QUOTE_MINT (which pools to look at, USDC or WSOL)
+  - RPC_ENDPOINT (https RPC endpoint)
+  - RPC_WEBSOCKET_ENDPOINT (websocket RPC endpoint)
+  - QUOTE_MINT (which pools to snipe, USDC or WSOL)
   - QUOTE_AMOUNT (amount used to buy each new token)
   - COMMITMENT_LEVEL
 
@@ -40,5 +40,5 @@ it means your RPC node doesn't support methods needed to execute script.
 `Error: No SOL token account found in wallet: `
 it means that wallet you provided doesn't have USDC/WSOL token account.
   - FIX: Go to dex and swap some SOL to USDC/WSOL. For example when you swap sol to wsol you should see it in wallet as shown below:
-![wsol](wsol.png)
 
+![wsol](wsol.png)

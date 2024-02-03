@@ -307,7 +307,7 @@ async function buy(
   const signature = await solanaConnection.sendRawTransaction(
     transaction.serialize(),
     {
-      maxRetries: 5,
+      maxRetries: 20,
       preflightCommitment: commitment,
     },
   );

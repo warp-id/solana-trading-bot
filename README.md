@@ -1,6 +1,6 @@
 
 # Solana Sniper Bot
-This code is written as proof of concept for demonstrating how we can buy new tokens immediately after liquidity pool is created.
+This code is written as proof of concept for demonstrating how we can buy new tokens immediately after liquidity pool is open for trading.
 
 Script listens to new raydium USDC/SOL pools and buys token for a fixed amount in USDC/SOL.  
 Depending on speed of RPC node, the purchase usually happens before token is available on Raydium UI for swapping.
@@ -18,14 +18,33 @@ In order to run the script you need to:
   - QUOTE_MINT (which pools to snipe, USDC or WSOL)
   - QUOTE_AMOUNT (amount used to buy each new token)
   - COMMITMENT_LEVEL
+  - USE_SNIPE_LIST (buy only tokens listed in snipe-list.txt)
+  - SNIPE_LIST_REFRESH_INTERVAL (how often snipe list should be refreshed in milliseconds)
 - Install dependencies by typing: `npm install`
 - Run the script by typing: `npm run buy` in terminal
 
 You should see the following output:  
 ![output](output.png)
 
+## Snipe list
+By default, script buys each token which has new liquidity pool created and open for trading. 
+There are scenarios when you want to buy one specific token as soon as possible during the launch event.
+To achieve this, you'll have to use snipe list.
+- Change variable `USE_SNIPE_LIST` to `true`
+- Add token mint addresses you wish to buy in `snipe-list.txt` file
+  - Add each address as a new line
+
+This will prevent script from buying everything, and instead it will buy just listed tokens.
+You can update the list while script is running. Script will check for new values in specified interval (`SNIPE_LIST_REFRESH_INTERVAL`).
+
+Pool must not exist before the script starts.
+It will buy only when new pool is open for trading. If you want to buy token that will be launched in the future, make sure that script is running before the launch.
+
 ## Common issues
 If you have an error which is not listed here, please create a new issue in this repository.
+
+### Empty transaction
+- If you see empty transactions on SolScan most likely fix is to change commitment level to `finalized`.
 
 ### Unsupported RPC node
 - If you see following error in your log file:  

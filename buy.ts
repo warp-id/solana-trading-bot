@@ -35,6 +35,8 @@ import { retrieveEnvVariable } from './utils';
 import { getAllMarketsV3, MinimalMarketLayoutV3 } from './market';
 import pino from 'pino';
 import bs58 from 'bs58';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const transport = pino.transport({
   targets: [
@@ -80,7 +82,6 @@ const solanaConnection = new Connection(RPC_ENDPOINT, {
 export type MinimalTokenAccountData = {
   mint: PublicKey;
   address: PublicKey;
-  ata: PublicKey;
   poolKeys?: LiquidityPoolKeys;
   market?: MinimalMarketLayoutV3;
 };
@@ -96,7 +97,16 @@ let wallet: Keypair;
 let quoteToken: Token;
 let quoteTokenAssociatedAddress: PublicKey;
 let quoteAmount: TokenAmount;
-let commitment: Commitment = retrieveEnvVariable('COMMITMENT_LEVEL', logger) as Commitment;
+let commitment: Commitment = retrieveEnvVariable(
+  'COMMITMENT_LEVEL',
+  logger,
+) as Commitment;
+
+const USE_SNIPE_LIST = Boolean(retrieveEnvVariable('USE_SNIPE_LIST', logger));
+const SNIPE_LIST_REFRESH_INTERVAL = Number(
+  retrieveEnvVariable('SNIPE_LIST_REFRESH_INTERVAL', logger),
+);
+let snipeList: string[] = [];
 
 async function init(): Promise<void> {
   // get wallet
@@ -132,7 +142,7 @@ async function init(): Promise<void> {
   }
 
   logger.info(
-    `Script will buy all new tokens using ${QUOTE_MINT}. Amount that will be used to buy each token is: ${quoteAmount.toFixed().toString()}`
+    `Script will buy all new tokens using ${QUOTE_MINT}. Amount that will be used to buy each token is: ${quoteAmount.toFixed().toString()}`,
   );
 
   // get all existing liquidity pools
@@ -146,13 +156,12 @@ async function init(): Promise<void> {
   );
 
   // get all open-book markets
-  const allMarkets = await getAllMarketsV3(solanaConnection, quoteToken.mint, commitment);
-  existingOpenBookMarkets = new Set(allMarkets.map((p) => p.id.toString()));
-  const tokenAccounts = await getTokenAccounts(
+  const allMarkets = await getAllMarketsV3(
     solanaConnection,
-    wallet.publicKey,
+    quoteToken.mint,
     commitment,
   );
+  existingOpenBookMarkets = new Set(allMarkets.map((p) => p.id.toString()));
 
   logger.info(
     `Total ${quoteToken.symbol} markets ${existingOpenBookMarkets.size}`,
@@ -162,6 +171,12 @@ async function init(): Promise<void> {
   );
 
   // check existing wallet for associated token account of quote mint
+  const tokenAccounts = await getTokenAccounts(
+    solanaConnection,
+    wallet.publicKey,
+    commitment,
+  );
+
   for (const ta of tokenAccounts) {
     existingTokenAccounts.set(ta.accountInfo.mint.toString(), <
       MinimalTokenAccountData
@@ -182,6 +197,9 @@ async function init(): Promise<void> {
   }
 
   quoteTokenAssociatedAddress = tokenAccount.pubkey;
+
+  // load tokens to snipe
+  loadSnipeList();
 }
 
 export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
@@ -190,6 +208,11 @@ export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
     accountData = LIQUIDITY_STATE_LAYOUT_V4.decode(
       updatedAccountInfo.accountInfo.data,
     );
+
+    if (!shouldBuy(accountData.baseMint.toString())) {
+      return;
+    }
+
     await buy(updatedAccountInfo.accountId, accountData);
   } catch (e) {
     logger.error({ ...accountData, error: e }, `Failed to process pool`);
@@ -297,16 +320,36 @@ async function buy(
   );
 }
 
+function loadSnipeList() {
+  if (!USE_SNIPE_LIST) {
+    return;
+  }
+
+  const count = snipeList.length;
+  const data = fs.readFileSync(path.join(__dirname, 'snipe-list.txt'), 'utf-8');
+  snipeList = data
+    .split('\n')
+    .map((a) => a.trim())
+    .filter((a) => a);
+
+  if (snipeList.length != count) {
+    logger.info(`Loaded snipe list: ${snipeList.length}`);
+  }
+}
+
+function shouldBuy(key: string): boolean {
+  return USE_SNIPE_LIST ? snipeList.includes(key) : true;
+}
+
 const runListener = async () => {
   await init();
   const raydiumSubscriptionId = solanaConnection.onProgramAccountChange(
     RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
     async (updatedAccountInfo) => {
-      const existing = existingLiquidityPools.has(
-        updatedAccountInfo.accountId.toString(),
-      );
+      const key = updatedAccountInfo.accountId.toString();
+      const existing = existingLiquidityPools.has(key);
       if (!existing) {
-        existingLiquidityPools.add(updatedAccountInfo.accountId.toString());
+        existingLiquidityPools.add(key);
         const _ = processRaydiumPool(updatedAccountInfo);
       }
     },
@@ -337,11 +380,10 @@ const runListener = async () => {
   const openBookSubscriptionId = solanaConnection.onProgramAccountChange(
     OPENBOOK_PROGRAM_ID,
     async (updatedAccountInfo) => {
-      const existing = existingOpenBookMarkets.has(
-        updatedAccountInfo.accountId.toString(),
-      );
+      const key = updatedAccountInfo.accountId.toString();
+      const existing = existingOpenBookMarkets.has(key);
       if (!existing) {
-        existingOpenBookMarkets.add(updatedAccountInfo.accountId.toString());
+        existingOpenBookMarkets.add(key);
         const _ = processOpenBookMarket(updatedAccountInfo);
       }
     },
@@ -359,6 +401,10 @@ const runListener = async () => {
 
   logger.info(`Listening for raydium changes: ${raydiumSubscriptionId}`);
   logger.info(`Listening for open book changes: ${openBookSubscriptionId}`);
+
+  if (USE_SNIPE_LIST) {
+    setInterval(loadSnipeList, SNIPE_LIST_REFRESH_INTERVAL);
+  }
 };
 
 runListener();

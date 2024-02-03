@@ -102,7 +102,7 @@ let commitment: Commitment = retrieveEnvVariable(
   logger,
 ) as Commitment;
 
-const USE_SNIPE_LIST = Boolean(retrieveEnvVariable('USE_SNIPE_LIST', logger));
+const USE_SNIPE_LIST = retrieveEnvVariable('USE_SNIPE_LIST', logger) === 'true';
 const SNIPE_LIST_REFRESH_INTERVAL = Number(
   retrieveEnvVariable('SNIPE_LIST_REFRESH_INTERVAL', logger),
 );

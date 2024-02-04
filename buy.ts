@@ -147,20 +147,14 @@ async function init(): Promise<void> {
 
   // get all existing liquidity pools
   const allLiquidityPools = await getAllAccountsV4(
-    solanaConnection,
     quoteToken.mint,
-    commitment,
   );
   existingLiquidityPools = new Set(
     allLiquidityPools.map((p) => p.id.toString()),
   );
 
   // get all open-book markets
-  const allMarkets = await getAllMarketsV3(
-    solanaConnection,
-    quoteToken.mint,
-    commitment,
-  );
+  const allMarkets = await getAllMarketsV3();
   existingOpenBookMarkets = new Set(allMarkets.map((p) => p.id.toString()));
 
   logger.info(

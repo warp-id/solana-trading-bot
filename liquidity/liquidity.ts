@@ -13,6 +13,7 @@ import {
 } from '@raydium-io/raydium-sdk';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { MinimalMarketLayoutV3 } from '../market';
+import bs58 from 'bs58';
 
 export const RAYDIUM_LIQUIDITY_PROGRAM_ID_V4 = MAINNET_PROGRAM_ID.AmmV4;
 export const OPENBOOK_PROGRAM_ID = MAINNET_PROGRAM_ID.OPENBOOK_MARKET;
@@ -52,6 +53,12 @@ export async function getAllAccountsV4(
           memcmp: {
             offset: LIQUIDITY_STATE_LAYOUT_V4.offsetOf('marketProgramId'),
             bytes: OPENBOOK_PROGRAM_ID.toBase58(),
+          },
+        },
+        {
+          memcmp: {
+            offset: LIQUIDITY_STATE_LAYOUT_V4.offsetOf('status'),
+            bytes: bs58.encode([6, 0, 0, 0, 0, 0, 0, 0]),
           },
         },
       ],

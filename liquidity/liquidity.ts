@@ -1,7 +1,6 @@
 import { Commitment, Connection, PublicKey } from '@solana/web3.js';
 import {
   Liquidity,
-  LIQUIDITY_STATE_LAYOUT_V4,
   LiquidityPoolKeys,
   Market,
   TokenAccount,
@@ -14,6 +13,25 @@ import {
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { MinimalMarketLayoutV3 } from '../market';
 import bs58 from 'bs58';
+import axios from 'axios';
+
+interface LiquidityPool {
+  id: string;
+  baseMint: string;
+  quoteMint: string;
+  // ... autres propriétés
+}
+
+interface LiquidityJsonResponse {
+  official: LiquidityPool[];
+  unOfficial: LiquidityPool[];
+}
+
+interface MinimalLiquidityAccountData {
+  id: string;
+  version: number;
+  programId: string;
+}
 
 export const RAYDIUM_LIQUIDITY_PROGRAM_ID_V4 = MAINNET_PROGRAM_ID.AmmV4;
 export const OPENBOOK_PROGRAM_ID = MAINNET_PROGRAM_ID.OPENBOOK_MARKET;
@@ -24,55 +42,31 @@ export const MINIMAL_MARKET_STATE_LAYOUT_V3 = struct([
   publicKey('asks'),
 ]);
 
-export type MinimalLiquidityAccountData = {
-  id: PublicKey;
-  version: 4;
-  programId: PublicKey;
-};
-
 export async function getAllAccountsV4(
-  connection: Connection,
   quoteMint: PublicKey,
-  commitment?: Commitment,
-): Promise<MinimalLiquidityAccountData[]> {
-  const { span } = LIQUIDITY_STATE_LAYOUT_V4;
-  const accounts = await connection.getProgramAccounts(
-    RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
-    {
-      dataSlice: { offset: 0, length: 0 },
-      commitment: commitment,
-      filters: [
-        { dataSize: span },
-        {
-          memcmp: {
-            offset: LIQUIDITY_STATE_LAYOUT_V4.offsetOf('quoteMint'),
-            bytes: quoteMint.toBase58(),
-          },
-        },
-        {
-          memcmp: {
-            offset: LIQUIDITY_STATE_LAYOUT_V4.offsetOf('marketProgramId'),
-            bytes: OPENBOOK_PROGRAM_ID.toBase58(),
-          },
-        },
-        {
-          memcmp: {
-            offset: LIQUIDITY_STATE_LAYOUT_V4.offsetOf('status'),
-            bytes: bs58.encode([6, 0, 0, 0, 0, 0, 0, 0]),
-          },
-        },
-      ],
-    },
-  );
-
-  return accounts.map(
-    (info) =>
-      <MinimalLiquidityAccountData>{
-        id: info.pubkey,
-        version: 4,
-        programId: RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
-      },
-  );
+): Promise<{ id: string; version: number; programId: PublicKey }[]> {
+  const url = 'https://api.raydium.io/v2/sdk/liquidity/mainnet.json';
+  try {
+    const response = await axios.get<LiquidityJsonResponse>(url);
+    // @ts-ignore
+    const json = response.data;
+    const filteredPools = json.official.concat(json.unOfficial)
+      .filter(pool => {
+        if (!pool) {
+          console.log('Pool undefined:', pool);
+          return false;
+        }
+        return pool.quoteMint && pool.quoteMint === quoteMint.toBase58();
+      });
+    return filteredPools.map(pool => ({
+      id: pool.id,
+      version: 4,
+      programId: RAYDIUM_LIQUIDITY_PROGRAM_ID_V4, // Assurez-vous que cette constante est définie
+    }));
+  } catch (error) {
+    console.error('Error during data retrieval:', error);
+    return [];
+  }
 }
 
 export function createPoolKeys(

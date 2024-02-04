@@ -164,6 +164,12 @@ async function init(): Promise<void> {
     `Total ${quoteToken.symbol} pools ${existingLiquidityPools.size}`,
   );
 
+  const tokenAccounts = await getTokenAccounts(
+    solanaConnection,
+    wallet.publicKey,
+    commitment,
+  );
+
   // check existing wallet for associated token account of quote mint
   const tokenAccounts = await getTokenAccounts(
     solanaConnection,

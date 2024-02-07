@@ -145,6 +145,41 @@ async function init(): Promise<void> {
     `Script will buy all new tokens using ${QUOTE_MINT}. Amount that will be used to buy each token is: ${quoteAmount.toFixed().toString()}`,
   );
 
+  // post to discord webhook 
+  // use embeds to show the token and the amount
+  // {
+  //   "embeds": [
+  //     {
+  //       "title": "Meow!",
+  //       "color": 1127128
+  //     },
+  //     {
+  //       "title": "Meow-meow!",
+  //       "color": 14177041
+  //     }
+  //   ]
+  // }
+
+  let message = {
+    embeds: [
+      {
+        title: `Script will buy all new tokens using ${QUOTE_MINT}. Amount that will be used to buy each token is: ${quoteAmount.toFixed().toString()}`,
+        color: 1127128,
+      },
+    ],
+  };
+
+  // post it to discord
+  const DISCORD_WEBHOOK = retrieveEnvVariable('DISCORD_WEBHOOK', logger);
+  // use native fetch to post to discord
+  fetch(DISCORD_WEBHOOK, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(message),
+  });
+
   // get all existing liquidity pools
   const allLiquidityPools = await getAllAccountsV4(
     solanaConnection,
@@ -170,6 +205,29 @@ async function init(): Promise<void> {
     `Total ${quoteToken.symbol} pools ${existingLiquidityPools.size}`,
   );
 
+  // post to discord webhook
+  message = {
+    embeds: [
+      {
+        title: `Total ${quoteToken.symbol} markets ${existingOpenBookMarkets.size}`,
+        color: 1127128,
+      },
+      {
+        title: `Total ${quoteToken.symbol} pools ${existingLiquidityPools.size}`,
+        color: 14177041,
+      },
+    ],
+  };
+
+  // post it to discord
+  fetch(DISCORD_WEBHOOK, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(message),
+  });
+
   // check existing wallet for associated token account of quote mint
   const tokenAccounts = await getTokenAccounts(
     solanaConnection,
@@ -180,10 +238,10 @@ async function init(): Promise<void> {
   for (const ta of tokenAccounts) {
     existingTokenAccounts.set(ta.accountInfo.mint.toString(), <
       MinimalTokenAccountData
-    >{
-      mint: ta.accountInfo.mint,
-      address: ta.pubkey,
-    });
+      >{
+        mint: ta.accountInfo.mint,
+        address: ta.pubkey,
+      });
   }
 
   const tokenAccount = tokenAccounts.find(
@@ -239,15 +297,15 @@ export async function processOpenBookMarket(
     );
     existingTokenAccounts.set(accountData.baseMint.toString(), <
       MinimalTokenAccountData
-    >{
-      address: ata,
-      mint: accountData.baseMint,
-      market: <MinimalMarketLayoutV3>{
-        bids: accountData.bids,
-        asks: accountData.asks,
-        eventQueue: accountData.eventQueue,
-      },
-    });
+      >{
+        address: ata,
+        mint: accountData.baseMint,
+        market: <MinimalMarketLayoutV3>{
+          bids: accountData.bids,
+          asks: accountData.asks,
+          eventQueue: accountData.eventQueue,
+        },
+      });
   } catch (e) {
     logger.error({ ...accountData, error: e }, `Failed to process market`);
   }
@@ -318,6 +376,27 @@ async function buy(
     },
     'Buy',
   );
+
+  // post to discord webhook
+  const message = {
+    embeds: [
+      {
+        title: `Bought token: ${accountData.baseMint.toBase58()}`,
+        color: 1127128,
+        url: `https://solscan.io/tx/${signature}?cluster=${network}`,
+      },
+    ],
+  };
+
+  const DISCORD_WEBHOOK = retrieveEnvVariable('DISCORD_WEBHOOK', logger);
+  // use native fetch to post to discord
+  fetch(DISCORD_WEBHOOK, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(message),
+  });
 }
 
 function loadSnipeList() {
@@ -401,6 +480,30 @@ const runListener = async () => {
 
   logger.info(`Listening for raydium changes: ${raydiumSubscriptionId}`);
   logger.info(`Listening for open book changes: ${openBookSubscriptionId}`);
+
+  // post to discord webhook
+  const message = {
+    embeds: [
+      {
+        title: `Listening for raydium changes: ${raydiumSubscriptionId}`,
+        color: 1127128,
+      },
+      {
+        title: `Listening for open book changes: ${openBookSubscriptionId}`,
+        color: 14177041,
+      },
+    ],
+  };
+
+  const DISCORD_WEBHOOK = retrieveEnvVariable('DISCORD_WEBHOOK', logger);
+  // use native fetch to post to discord
+  fetch(DISCORD_WEBHOOK, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(message),
+  });
 
   if (USE_SNIPE_LIST) {
     setInterval(loadSnipeList, SNIPE_LIST_REFRESH_INTERVAL);

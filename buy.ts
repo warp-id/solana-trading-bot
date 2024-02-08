@@ -37,10 +37,11 @@ import pino from 'pino';
 import bs58 from 'bs58';
 import * as fs from 'fs';
 import * as path from 'path';
+import BN from 'bn.js';
 
 const transport = pino.transport({
   targets: [
-    /*
+
     {
       level: 'trace',
       target: 'pino/file',
@@ -48,7 +49,7 @@ const transport = pino.transport({
         destination: 'buy.log',
       },
     },
-    */
+
     {
       level: 'trace',
       target: 'pino-pretty',
@@ -145,20 +146,6 @@ async function init(): Promise<void> {
     `Script will buy all new tokens using ${QUOTE_MINT}. Amount that will be used to buy each token is: ${quoteAmount.toFixed().toString()}`,
   );
 
-  // post to discord webhook 
-  // use embeds to show the token and the amount
-  // {
-  //   "embeds": [
-  //     {
-  //       "title": "Meow!",
-  //       "color": 1127128
-  //     },
-  //     {
-  //       "title": "Meow-meow!",
-  //       "color": 14177041
-  //     }
-  //   ]
-  // }
 
   let message = {
     embeds: [
@@ -272,6 +259,9 @@ export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
     }
 
     await buy(updatedAccountInfo.accountId, accountData);
+    // wait for 5 seconds before selling
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    await sell(updatedAccountInfo.accountId, accountData);
   } catch (e) {
     logger.error({ ...accountData, error: e }, `Failed to process pool`);
   }
@@ -398,6 +388,131 @@ async function buy(
     body: JSON.stringify(message),
   });
 }
+
+const maxRetries = 60;
+async function sell(
+  accountId: PublicKey,
+  accountData: LiquidityStateV4,
+): Promise<void> {
+  const tokenAccount = existingTokenAccounts.get(
+    accountData.baseMint.toString(),
+  );
+
+  if (!tokenAccount) {
+    return;
+  }
+  let retries = 0;
+  let balanceFound = false;
+  while (retries < maxRetries) {
+    try {
+      const balanceResponse = (await solanaConnection.getTokenAccountBalance(tokenAccount.address)).value.amount;
+      if (balanceResponse !== null && Number(balanceResponse) > 0 && !balanceFound) {
+        balanceFound = true;
+        console.log("Token balance: ", balanceResponse);
+        // send to discord
+        const tokenBalanceMessage = {
+          embeds: [
+            {
+              title: `Token balance: ${balanceResponse}`,
+              color: 1127128,
+            },
+          ],
+        };
+
+        const DISCORD_WEBHOOK = retrieveEnvVariable('DISCORD_WEBHOOK', logger);
+        // use native fetch to post to discord
+        fetch(DISCORD_WEBHOOK, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(tokenBalanceMessage),
+        });
+
+        tokenAccount.poolKeys = createPoolKeys(
+          accountId,
+          accountData,
+          tokenAccount.market!,
+        );
+        const { innerTransaction, address } = Liquidity.makeSwapFixedInInstruction(
+          {
+            poolKeys: tokenAccount.poolKeys,
+            userKeys: {
+              tokenAccountIn: tokenAccount.address,
+              tokenAccountOut: quoteTokenAssociatedAddress,
+              owner: wallet.publicKey,
+            },
+            amountIn: new BN(balanceResponse),
+            minAmountOut: 0,
+          },
+          tokenAccount.poolKeys.version,
+        );
+
+        const latestBlockhash = await solanaConnection.getLatestBlockhash({
+          commitment: commitment,
+        });
+        const messageV0 = new TransactionMessage({
+          payerKey: wallet.publicKey,
+          recentBlockhash: latestBlockhash.blockhash,
+          instructions: [
+            ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }),
+            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200000 }),
+            createAssociatedTokenAccountIdempotentInstruction(
+              wallet.publicKey,
+              tokenAccount.address,
+              wallet.publicKey,
+              accountData.baseMint,
+            ),
+            ...innerTransaction.instructions,
+          ],
+        }).compileToV0Message();
+        const transaction = new VersionedTransaction(messageV0);
+        transaction.sign([wallet, ...innerTransaction.signers]);
+        const signature = await solanaConnection.sendRawTransaction(
+          transaction.serialize(),
+          {
+            maxRetries: 5,
+            preflightCommitment: commitment,
+          },
+        );
+        logger.info(
+          {
+            mint: accountData.baseMint,
+            url: `https://solscan.io/tx/${signature}?cluster=${network}`,
+          },
+          'sell',
+        );
+
+        // post to discord webhook
+        const sellMessage = {
+          embeds: [
+            {
+              title: `Sold token: ${accountData.baseMint.toBase58()}`,
+              color: 1127128,
+              url: `https://solscan.io/tx/${signature}?cluster=${network}`,
+            },
+          ],
+        };
+
+        // const DISCORD_WEBHOOK = retrieveEnvVariable('DISCORD_WEBHOOK', logger);
+        // use native fetch to post to discord
+        fetch(DISCORD_WEBHOOK, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(sellMessage),
+        });
+
+        break;
+      }
+    } catch (error) {
+    }
+    retries++;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+
 
 function loadSnipeList() {
   if (!USE_SNIPE_LIST) {

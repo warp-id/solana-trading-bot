@@ -3,7 +3,6 @@ import {
   LIQUIDITY_STATE_LAYOUT_V4,
   LiquidityPoolKeys,
   LiquidityStateV4,
-  MARKET_STATE_LAYOUT_V2,
   MARKET_STATE_LAYOUT_V3,
   MarketStateV3,
   Token,
@@ -31,7 +30,7 @@ import {
   createPoolKeys,
 } from './liquidity';
 import { retrieveEnvVariable } from './utils';
-import { getAllMarketsV3, MinimalMarketLayoutV3 } from './market';
+import { getMinimalMarketV3, MinimalMarketLayoutV3 } from './market';
 import pino from 'pino';
 import bs58 from 'bs58';
 import * as fs from 'fs';
@@ -144,17 +143,6 @@ async function init(): Promise<void> {
     `Script will buy all new tokens using ${QUOTE_MINT}. Amount that will be used to buy each token is: ${quoteAmount.toFixed().toString()}`,
   );
 
-  logger.info(`Loading existing markets...`);
-  // get all open-book markets
-  const allMarkets = await getAllMarketsV3(
-    solanaConnection,
-    quoteToken.mint,
-    commitment,
-  );
-  existingOpenBookMarkets = new Set(allMarkets.map((p) => p.id.toString()));
-  logger.info(
-    `Loaded ${existingOpenBookMarkets.size} ${quoteToken.symbol} markets`,
-  );
   // check existing wallet for associated token account of quote mint
   const tokenAccounts = await getTokenAccounts(
     solanaConnection,
@@ -187,6 +175,21 @@ async function init(): Promise<void> {
   loadSnipeList();
 }
 
+function saveTokenAccount(mint: PublicKey, accountData: MinimalMarketLayoutV3) {
+  const ata = getAssociatedTokenAddressSync(mint, wallet.publicKey);
+  const tokenAccount = <MinimalTokenAccountData>{
+    address: ata,
+    mint: mint,
+    market: <MinimalMarketLayoutV3>{
+      bids: accountData.bids,
+      asks: accountData.asks,
+      eventQueue: accountData.eventQueue,
+    },
+  };
+  existingTokenAccounts.set(mint.toString(), tokenAccount);
+  return tokenAccount;
+}
+
 export async function processRaydiumPool(
   id: PublicKey,
   poolState: LiquidityStateV4,
@@ -216,21 +219,7 @@ export async function processOpenBookMarket(
       return;
     }
 
-    const ata = getAssociatedTokenAddressSync(
-      accountData.baseMint,
-      wallet.publicKey,
-    );
-    existingTokenAccounts.set(accountData.baseMint.toString(), <
-      MinimalTokenAccountData
-    >{
-      address: ata,
-      mint: accountData.baseMint,
-      market: <MinimalMarketLayoutV3>{
-        bids: accountData.bids,
-        asks: accountData.asks,
-        eventQueue: accountData.eventQueue,
-      },
-    });
+    saveTokenAccount(accountData.baseMint, accountData);
   } catch (e) {
     logger.error({ ...accountData, error: e }, `Failed to process market`);
   }
@@ -240,12 +229,16 @@ async function buy(
   accountId: PublicKey,
   accountData: LiquidityStateV4,
 ): Promise<void> {
-  const tokenAccount = existingTokenAccounts.get(
-    accountData.baseMint.toString(),
-  );
+  let tokenAccount = existingTokenAccounts.get(accountData.baseMint.toString());
 
   if (!tokenAccount) {
-    return;
+    // it's possible that we didn't have time to fetch open book data
+    const market = await getMinimalMarketV3(
+      solanaConnection,
+      accountData.marketId,
+      commitment,
+    );
+    tokenAccount = saveTokenAccount(accountData.baseMint, market);
   }
 
   tokenAccount.poolKeys = createPoolKeys(
@@ -378,10 +371,10 @@ const runListener = async () => {
     },
     commitment,
     [
-      { dataSize: MARKET_STATE_LAYOUT_V2.span },
+      { dataSize: MARKET_STATE_LAYOUT_V3.span },
       {
         memcmp: {
-          offset: MARKET_STATE_LAYOUT_V2.offsetOf('quoteMint'),
+          offset: MARKET_STATE_LAYOUT_V3.offsetOf('quoteMint'),
           bytes: quoteToken.mint.toBase58(),
         },
       },

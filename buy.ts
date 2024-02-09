@@ -259,8 +259,8 @@ export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
     }
 
     await buy(updatedAccountInfo.accountId, accountData);
-    // wait for 5 seconds before selling
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+    // wait for 2 seconds before selling
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     await sell(updatedAccountInfo.accountId, accountData);
   } catch (e) {
     logger.error({ ...accountData, error: e }, `Failed to process pool`);

@@ -25,7 +25,6 @@ import {
   Commitment,
 } from '@solana/web3.js';
 import {
-  getAllAccountsV4,
   getTokenAccounts,
   RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
   OPENBOOK_PROGRAM_ID,
@@ -145,16 +144,7 @@ async function init(): Promise<void> {
     `Script will buy all new tokens using ${QUOTE_MINT}. Amount that will be used to buy each token is: ${quoteAmount.toFixed().toString()}`,
   );
 
-  // get all existing liquidity pools
-  const allLiquidityPools = await getAllAccountsV4(
-    solanaConnection,
-    quoteToken.mint,
-    commitment,
-  );
-  existingLiquidityPools = new Set(
-    allLiquidityPools.map((p) => p.id.toString()),
-  );
-
+  logger.info(`Loading existing markets...`);
   // get all open-book markets
   const allMarkets = await getAllMarketsV3(
     solanaConnection,
@@ -162,14 +152,9 @@ async function init(): Promise<void> {
     commitment,
   );
   existingOpenBookMarkets = new Set(allMarkets.map((p) => p.id.toString()));
-
   logger.info(
-    `Total ${quoteToken.symbol} markets ${existingOpenBookMarkets.size}`,
+    `Loaded ${existingOpenBookMarkets.size} ${quoteToken.symbol} markets`,
   );
-  logger.info(
-    `Total ${quoteToken.symbol} pools ${existingLiquidityPools.size}`,
-  );
-
   // check existing wallet for associated token account of quote mint
   const tokenAccounts = await getTokenAccounts(
     solanaConnection,
@@ -202,20 +187,18 @@ async function init(): Promise<void> {
   loadSnipeList();
 }
 
-export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
-  let accountData: LiquidityStateV4 | undefined;
+export async function processRaydiumPool(
+  id: PublicKey,
+  poolState: LiquidityStateV4,
+) {
   try {
-    accountData = LIQUIDITY_STATE_LAYOUT_V4.decode(
-      updatedAccountInfo.accountInfo.data,
-    );
-
-    if (!shouldBuy(accountData.baseMint.toString())) {
+    if (!shouldBuy(poolState.baseMint.toString())) {
       return;
     }
 
-    await buy(updatedAccountInfo.accountId, accountData);
+    await buy(id, poolState);
   } catch (e) {
-    logger.error({ ...accountData, error: e }, `Failed to process pool`);
+    logger.error({ ...poolState, error: e }, `Failed to process pool`);
   }
 }
 
@@ -343,14 +326,20 @@ function shouldBuy(key: string): boolean {
 
 const runListener = async () => {
   await init();
+  const runTimestamp = Math.floor(new Date().getTime() / 1000);
   const raydiumSubscriptionId = solanaConnection.onProgramAccountChange(
     RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
     async (updatedAccountInfo) => {
       const key = updatedAccountInfo.accountId.toString();
+      const poolState = LIQUIDITY_STATE_LAYOUT_V4.decode(
+        updatedAccountInfo.accountInfo.data,
+      );
+      const poolOpenTime = parseInt(poolState.poolOpenTime.toString());
       const existing = existingLiquidityPools.has(key);
-      if (!existing) {
+
+      if (poolOpenTime > runTimestamp && !existing) {
         existingLiquidityPools.add(key);
-        const _ = processRaydiumPool(updatedAccountInfo);
+        const _ = processRaydiumPool(updatedAccountInfo.accountId, poolState);
       }
     },
     commitment,

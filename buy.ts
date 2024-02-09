@@ -191,7 +191,6 @@ export async function processRaydiumPool(
   id: PublicKey,
   poolState: LiquidityStateV4,
 ) {
-  let accountData: LiquidityStateV4 | undefined;
   try {
     if (!shouldBuy(poolState.baseMint.toString())) {
       return;
@@ -199,7 +198,7 @@ export async function processRaydiumPool(
 
     await buy(id, poolState);
   } catch (e) {
-    logger.error({ ...accountData, error: e }, `Failed to process pool`);
+    logger.error({ ...poolState, error: e }, `Failed to process pool`);
   }
 }
 

@@ -259,9 +259,18 @@ export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
     }
 
     await buy(updatedAccountInfo.accountId, accountData);
-    // wait for 2 seconds before selling
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    await sell(updatedAccountInfo.accountId, accountData);
+
+    // Auto sell if enabled in .env file
+    const AUTO_SELL = retrieveEnvVariable('AUTO_SELL', logger);
+    if (AUTO_SELL === 'true') {
+      const SELL_DELAY = Number(retrieveEnvVariable('SELL_DELAY', logger));
+      await new Promise((resolve) => setTimeout(resolve, SELL_DELAY));
+      await sell(updatedAccountInfo.accountId, accountData);
+    } else {
+      logger.info(
+        `Auto sell is disabled. To enable it, set AUTO_SELL=true in .env file`,
+      );
+    }
   } catch (e) {
     logger.error({ ...accountData, error: e }, `Failed to process pool`);
   }

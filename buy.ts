@@ -42,13 +42,13 @@ import BN from 'bn.js';
 const transport = pino.transport({
   targets: [
 
-    {
-      level: 'trace',
-      target: 'pino/file',
-      options: {
-        destination: 'buy.log',
-      },
-    },
+    // {
+    //   level: 'trace',
+    //   target: 'pino/file',
+    //   options: {
+    //     destination: 'buy.log',
+    //   },
+    // },
 
     {
       level: 'trace',
@@ -246,7 +246,8 @@ async function init(): Promise<void> {
   // load tokens to snipe
   loadSnipeList();
 }
-
+// Auto sell if enabled in .env file
+const AUTO_SELL = retrieveEnvVariable('AUTO_SELL', logger);
 export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
   let accountData: LiquidityStateV4 | undefined;
   try {
@@ -260,8 +261,7 @@ export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
 
     await buy(updatedAccountInfo.accountId, accountData);
 
-    // Auto sell if enabled in .env file
-    const AUTO_SELL = retrieveEnvVariable('AUTO_SELL', logger);
+
     if (AUTO_SELL === 'true') {
       const SELL_DELAY = Number(retrieveEnvVariable('SELL_DELAY', logger));
       await new Promise((resolve) => setTimeout(resolve, SELL_DELAY));

@@ -3,7 +3,6 @@ import {
   LIQUIDITY_STATE_LAYOUT_V4,
   LiquidityPoolKeys,
   LiquidityStateV4,
-  MARKET_STATE_LAYOUT_V2,
   MARKET_STATE_LAYOUT_V3,
   MarketStateV3,
   Token,
@@ -25,14 +24,13 @@ import {
   Commitment,
 } from '@solana/web3.js';
 import {
-  getAllAccountsV4,
   getTokenAccounts,
   RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
   OPENBOOK_PROGRAM_ID,
   createPoolKeys,
 } from './liquidity';
 import { retrieveEnvVariable } from './utils';
-import { getAllMarketsV3, MinimalMarketLayoutV3 } from './market';
+import { getMinimalMarketV3, MinimalMarketLayoutV3 } from './market';
 import pino from 'pino';
 import bs58 from 'bs58';
 import * as fs from 'fs';
@@ -146,75 +144,6 @@ async function init(): Promise<void> {
     `Script will buy all new tokens using ${QUOTE_MINT}. Amount that will be used to buy each token is: ${quoteAmount.toFixed().toString()}`,
   );
 
-
-  let message = {
-    embeds: [
-      {
-        title: `Script will buy all new tokens using ${QUOTE_MINT}. Amount that will be used to buy each token is: ${quoteAmount.toFixed().toString()}`,
-        color: 1127128,
-      },
-    ],
-  };
-
-  // post it to discord
-  const DISCORD_WEBHOOK = retrieveEnvVariable('DISCORD_WEBHOOK', logger);
-  // use native fetch to post to discord
-  fetch(DISCORD_WEBHOOK, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(message),
-  });
-
-  // get all existing liquidity pools
-  const allLiquidityPools = await getAllAccountsV4(
-    solanaConnection,
-    quoteToken.mint,
-    commitment,
-  );
-  existingLiquidityPools = new Set(
-    allLiquidityPools.map((p) => p.id.toString()),
-  );
-
-  // get all open-book markets
-  const allMarkets = await getAllMarketsV3(
-    solanaConnection,
-    quoteToken.mint,
-    commitment,
-  );
-  existingOpenBookMarkets = new Set(allMarkets.map((p) => p.id.toString()));
-
-  logger.info(
-    `Total ${quoteToken.symbol} markets ${existingOpenBookMarkets.size}`,
-  );
-  logger.info(
-    `Total ${quoteToken.symbol} pools ${existingLiquidityPools.size}`,
-  );
-
-  // post to discord webhook
-  message = {
-    embeds: [
-      {
-        title: `Total ${quoteToken.symbol} markets ${existingOpenBookMarkets.size}`,
-        color: 1127128,
-      },
-      {
-        title: `Total ${quoteToken.symbol} pools ${existingLiquidityPools.size}`,
-        color: 14177041,
-      },
-    ],
-  };
-
-  // post it to discord
-  fetch(DISCORD_WEBHOOK, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(message),
-  });
-
   // check existing wallet for associated token account of quote mint
   const tokenAccounts = await getTokenAccounts(
     solanaConnection,
@@ -246,33 +175,34 @@ async function init(): Promise<void> {
   // load tokens to snipe
   loadSnipeList();
 }
-// Auto sell if enabled in .env file
-const AUTO_SELL = retrieveEnvVariable('AUTO_SELL', logger);
-export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
-  let accountData: LiquidityStateV4 | undefined;
-  try {
-    accountData = LIQUIDITY_STATE_LAYOUT_V4.decode(
-      updatedAccountInfo.accountInfo.data,
-    );
 
-    if (!shouldBuy(accountData.baseMint.toString())) {
+function saveTokenAccount(mint: PublicKey, accountData: MinimalMarketLayoutV3) {
+  const ata = getAssociatedTokenAddressSync(mint, wallet.publicKey);
+  const tokenAccount = <MinimalTokenAccountData>{
+    address: ata,
+    mint: mint,
+    market: <MinimalMarketLayoutV3>{
+      bids: accountData.bids,
+      asks: accountData.asks,
+      eventQueue: accountData.eventQueue,
+    },
+  };
+  existingTokenAccounts.set(mint.toString(), tokenAccount);
+  return tokenAccount;
+}
+
+export async function processRaydiumPool(
+  id: PublicKey,
+  poolState: LiquidityStateV4,
+) {
+  try {
+    if (!shouldBuy(poolState.baseMint.toString())) {
       return;
     }
 
-    await buy(updatedAccountInfo.accountId, accountData);
-
-
-    if (AUTO_SELL === 'true') {
-      const SELL_DELAY = Number(retrieveEnvVariable('SELL_DELAY', logger));
-      await new Promise((resolve) => setTimeout(resolve, SELL_DELAY));
-      await sell(updatedAccountInfo.accountId, accountData);
-    } else {
-      logger.info(
-        `Auto sell is disabled. To enable it, set AUTO_SELL=true in .env file`,
-      );
-    }
+    await buy(id, poolState);
   } catch (e) {
-    logger.error({ ...accountData, error: e }, `Failed to process pool`);
+    logger.error({ ...poolState, error: e }, `Failed to process pool`);
   }
 }
 
@@ -290,21 +220,7 @@ export async function processOpenBookMarket(
       return;
     }
 
-    const ata = getAssociatedTokenAddressSync(
-      accountData.baseMint,
-      wallet.publicKey,
-    );
-    existingTokenAccounts.set(accountData.baseMint.toString(), <
-      MinimalTokenAccountData
-      >{
-        address: ata,
-        mint: accountData.baseMint,
-        market: <MinimalMarketLayoutV3>{
-          bids: accountData.bids,
-          asks: accountData.asks,
-          eventQueue: accountData.eventQueue,
-        },
-      });
+    saveTokenAccount(accountData.baseMint, accountData);
   } catch (e) {
     logger.error({ ...accountData, error: e }, `Failed to process market`);
   }
@@ -314,12 +230,16 @@ async function buy(
   accountId: PublicKey,
   accountData: LiquidityStateV4,
 ): Promise<void> {
-  const tokenAccount = existingTokenAccounts.get(
-    accountData.baseMint.toString(),
-  );
+  let tokenAccount = existingTokenAccounts.get(accountData.baseMint.toString());
 
   if (!tokenAccount) {
-    return;
+    // it's possible that we didn't have time to fetch open book data
+    const market = await getMinimalMarketV3(
+      solanaConnection,
+      accountData.marketId,
+      commitment,
+    );
+    tokenAccount = saveTokenAccount(accountData.baseMint, market);
   }
 
   tokenAccount.poolKeys = createPoolKeys(
@@ -546,14 +466,20 @@ function shouldBuy(key: string): boolean {
 
 const runListener = async () => {
   await init();
+  const runTimestamp = Math.floor(new Date().getTime() / 1000);
   const raydiumSubscriptionId = solanaConnection.onProgramAccountChange(
     RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
     async (updatedAccountInfo) => {
       const key = updatedAccountInfo.accountId.toString();
+      const poolState = LIQUIDITY_STATE_LAYOUT_V4.decode(
+        updatedAccountInfo.accountInfo.data,
+      );
+      const poolOpenTime = parseInt(poolState.poolOpenTime.toString());
       const existing = existingLiquidityPools.has(key);
-      if (!existing) {
+
+      if (poolOpenTime > runTimestamp && !existing) {
         existingLiquidityPools.add(key);
-        const _ = processRaydiumPool(updatedAccountInfo);
+        const _ = processRaydiumPool(updatedAccountInfo.accountId, poolState);
       }
     },
     commitment,
@@ -592,10 +518,10 @@ const runListener = async () => {
     },
     commitment,
     [
-      { dataSize: MARKET_STATE_LAYOUT_V2.span },
+      { dataSize: MARKET_STATE_LAYOUT_V3.span },
       {
         memcmp: {
-          offset: MARKET_STATE_LAYOUT_V2.offsetOf('quoteMint'),
+          offset: MARKET_STATE_LAYOUT_V3.offsetOf('quoteMint'),
           bytes: quoteToken.mint.toBase58(),
         },
       },

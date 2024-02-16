@@ -210,13 +210,8 @@ export async function processRaydiumPool(
       const timeout = parseInt(SELL_DELAY, 10);
       await new Promise((resolve) => setTimeout(resolve, timeout));
 
-      // log poolstate info
-      // logger.info({ poolState }, `Pool state info`);
-
       await sell(id, poolState);
     }
-
-    // await sell(id, poolState);
   } catch (e) {
     logger.error({ ...poolState, error: e }, `Failed to process pool`);
   }
@@ -311,27 +306,6 @@ async function buy(
     },
     'Buy',
   );
-
-  // post to discord webhook
-  const message = {
-    embeds: [
-      {
-        title: `Bought token: ${accountData.baseMint.toBase58()}`,
-        color: 1127128,
-        url: `https://solscan.io/tx/${signature}?cluster=${network}`,
-      },
-    ],
-  };
-
-  const DISCORD_WEBHOOK = retrieveEnvVariable('DISCORD_WEBHOOK', logger);
-  // use native fetch to post to discord
-  fetch(DISCORD_WEBHOOK, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(message),
-  });
 }
 
 const maxRetries = 60;
@@ -353,26 +327,6 @@ async function sell(
       const balanceResponse = (await solanaConnection.getTokenAccountBalance(tokenAccount.address)).value.amount;
       if (balanceResponse !== null && Number(balanceResponse) > 0 && !balanceFound) {
         balanceFound = true;
-        console.log("Token balance: ", balanceResponse);
-        // send to discord
-        const tokenBalanceMessage = {
-          embeds: [
-            {
-              title: `Token balance: ${balanceResponse}`,
-              color: 1127128,
-            },
-          ],
-        };
-
-        const DISCORD_WEBHOOK = retrieveEnvVariable('DISCORD_WEBHOOK', logger);
-        // use native fetch to post to discord
-        fetch(DISCORD_WEBHOOK, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(tokenBalanceMessage),
-        });
 
         tokenAccount.poolKeys = createPoolKeys(
           accountId,
@@ -427,28 +381,6 @@ async function sell(
           },
           'sell',
         );
-
-        // post to discord webhook
-        const sellMessage = {
-          embeds: [
-            {
-              title: `Sold token: ${accountData.baseMint.toBase58()}`,
-              color: 1127128,
-              url: `https://solscan.io/tx/${signature}?cluster=${network}`,
-            },
-          ],
-        };
-
-        // const DISCORD_WEBHOOK = retrieveEnvVariable('DISCORD_WEBHOOK', logger);
-        // use native fetch to post to discord
-        fetch(DISCORD_WEBHOOK, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(sellMessage),
-        });
-
         break;
       }
     } catch (error) {
@@ -552,52 +484,5 @@ const runListener = async () => {
     setInterval(loadSnipeList, SNIPE_LIST_REFRESH_INTERVAL);
   }
 };
-
-// runListener();
-
-// make sure we can send a message on discord if there is an error or the script exits
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error(reason, 'Unhandled Rejection at:', promise);
-  const message = {
-    embeds: [
-      {
-        title: `Unhandled Rejection: ${reason}`,
-        color: 1127128,
-      },
-    ],
-  };
-
-  const DISCORD_WEBHOOK = retrieveEnvVariable('DISCORD_WEBHOOK', logger);
-  // use native fetch to post to discord
-  fetch(DISCORD_WEBHOOK, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(message),
-  });
-});
-
-process.on('uncaughtException', (err) => {
-  logger.error(err, 'Uncaught Exception thrown');
-  const message = {
-    embeds: [
-      {
-        title: `Uncaught Exception: ${err}`,
-        color: 1127128,
-      },
-    ],
-  };
-
-  const DISCORD_WEBHOOK = retrieveEnvVariable('DISCORD_WEBHOOK', logger);
-  // use native fetch to post to discord
-  fetch(DISCORD_WEBHOOK, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(message),
-  });
-});
 
 runListener();

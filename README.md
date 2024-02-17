@@ -60,9 +60,5 @@ If you have an error which is not listed here, please create a new issue in this
 
 ![wsol](wsol.png)
 
-## Support
-If you want to support my work, you can donate to my Solana wallet:
-`DM5buFVo7Fc3h6fb9W2f43RNARxWAmpkA3eSRQGDDQfw`
-
 ## Contact
 [![](https://img.shields.io/discord/1201826085655023616?color=5865F2&logo=Discord&style=flat-square)](https://discord.gg/xYUETCA2aP)

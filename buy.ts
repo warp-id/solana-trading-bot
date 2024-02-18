@@ -210,7 +210,8 @@ export async function processRaydiumPool(
       const timeout = parseInt(SELL_DELAY, 10);
       await new Promise((resolve) => setTimeout(resolve, timeout));
 
-      await sell(id, poolState);
+      let poolKeys = existingTokenAccounts.get(poolState.baseMint.toString())!.poolKeys;
+      await sell(id, poolState, poolKeys as LiquidityPoolKeys);
     }
   } catch (e) {
     logger.error({ ...poolState, error: e }, `Failed to process pool`);
@@ -312,6 +313,7 @@ const maxRetries = 60;
 async function sell(
   accountId: PublicKey,
   accountData: LiquidityStateV4,
+  poolKeys: LiquidityPoolKeys,
 ): Promise<void> {
   const tokenAccount = existingTokenAccounts.get(
     accountData.baseMint.toString(),
@@ -328,14 +330,9 @@ async function sell(
       if (balanceResponse !== null && Number(balanceResponse) > 0 && !balanceFound) {
         balanceFound = true;
 
-        tokenAccount.poolKeys = createPoolKeys(
-          accountId,
-          accountData,
-          tokenAccount.market!,
-        );
         const { innerTransaction, address } = Liquidity.makeSwapFixedInInstruction(
           {
-            poolKeys: tokenAccount.poolKeys,
+            poolKeys: poolKeys,
             userKeys: {
               tokenAccountIn: tokenAccount.address,
               tokenAccountOut: quoteTokenAssociatedAddress,
@@ -344,7 +341,7 @@ async function sell(
             amountIn: new BN(balanceResponse),
             minAmountOut: 0,
           },
-          tokenAccount.poolKeys.version,
+          poolKeys.version,
         );
 
         const latestBlockhash = await solanaConnection.getLatestBlockhash({
@@ -356,12 +353,6 @@ async function sell(
           instructions: [
             ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }),
             ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200000 }),
-            createAssociatedTokenAccountIdempotentInstruction(
-              wallet.publicKey,
-              tokenAccount.address,
-              wallet.publicKey,
-              accountData.baseMint,
-            ),
             ...innerTransaction.instructions,
           ],
         }).compileToV0Message();
@@ -384,6 +375,7 @@ async function sell(
         break;
       }
     } catch (error) {
+      // logger.error(`Error while selling: ${error}`);
     }
     retries++;
     await new Promise((resolve) => setTimeout(resolve, 1000));

@@ -131,3 +131,7 @@ dist
 
 
 .idea
+TODO
+
+# pnpm 
+pnpm-lock.yaml

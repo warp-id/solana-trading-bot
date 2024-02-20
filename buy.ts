@@ -199,9 +199,36 @@ export async function processRaydiumPool(
       return;
     }
 
+    const mintable = await checkMintable(poolState.baseMint)
+  if(mintable) {
+    console.log('Mintable check passed, proceding with buy');
     await buy(id, poolState);
+  } else {
+    console.log('Skipping, owner can mint tokens!')
+  }
   } catch (e) {
     logger.error({ ...poolState, error: e }, `Failed to process pool`);
+  }
+}
+
+export async function checkMintable(vault: PublicKey) {
+  try {
+    let { data } = (await solanaConnection.getAccountInfo(vault)) || {};
+    if (!data) {
+      return;
+    }
+		// Deserialize Data.
+    const deserialize = MintLayout.decode(data)
+    const mintoption  = deserialize.mintAuthorityOption
+
+    if (mintoption === 0) {
+      return true;
+    } else {
+      return false;
+    }
+
+  } catch {
+    return null;
   }
 }
 
@@ -291,6 +318,7 @@ async function buy(
     {
       mint: accountData.baseMint,
       url: `https://solscan.io/tx/${signature}?cluster=${network}`,
+      dexURL: `https://dexscreener.com/solana/${accountData.baseMint}?maker=${wallet.publicKey}`
     },
     'Buy',
   );

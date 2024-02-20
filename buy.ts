@@ -10,6 +10,7 @@ import {
 } from '@raydium-io/raydium-sdk';
 import {
   createAssociatedTokenAccountIdempotentInstruction,
+  createCloseAccountInstruction,
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
@@ -23,12 +24,7 @@ import {
   VersionedTransaction,
   Commitment,
 } from '@solana/web3.js';
-import {
-  getTokenAccounts,
-  RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
-  OPENBOOK_PROGRAM_ID,
-  createPoolKeys,
-} from './liquidity';
+import { getTokenAccounts, RAYDIUM_LIQUIDITY_PROGRAM_ID_V4, OPENBOOK_PROGRAM_ID, createPoolKeys } from './liquidity';
 import { retrieveEnvVariable } from './utils';
 import { getMinimalMarketV3, MinimalMarketLayoutV3 } from './market';
 import pino from 'pino';
@@ -39,7 +35,6 @@ import BN from 'bn.js';
 
 const transport = pino.transport({
   targets: [
-
     // {
     //   level: 'trace',
     //   target: 'pino/file',
@@ -69,10 +64,7 @@ export const logger = pino(
 
 const network = 'mainnet-beta';
 const RPC_ENDPOINT = retrieveEnvVariable('RPC_ENDPOINT', logger);
-const RPC_WEBSOCKET_ENDPOINT = retrieveEnvVariable(
-  'RPC_WEBSOCKET_ENDPOINT',
-  logger,
-);
+const RPC_WEBSOCKET_ENDPOINT = retrieveEnvVariable('RPC_WEBSOCKET_ENDPOINT', logger);
 
 const solanaConnection = new Connection(RPC_ENDPOINT, {
   wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
@@ -87,24 +79,20 @@ export type MinimalTokenAccountData = {
 
 let existingLiquidityPools: Set<string> = new Set<string>();
 let existingOpenBookMarkets: Set<string> = new Set<string>();
-let existingTokenAccounts: Map<string, MinimalTokenAccountData> = new Map<
-  string,
-  MinimalTokenAccountData
->();
+let existingTokenAccounts: Map<string, MinimalTokenAccountData> = new Map<string, MinimalTokenAccountData>();
 
 let wallet: Keypair;
 let quoteToken: Token;
 let quoteTokenAssociatedAddress: PublicKey;
 let quoteAmount: TokenAmount;
-let commitment: Commitment = retrieveEnvVariable(
-  'COMMITMENT_LEVEL',
-  logger,
-) as Commitment;
+let commitment: Commitment = retrieveEnvVariable('COMMITMENT_LEVEL', logger) as Commitment;
 
 const USE_SNIPE_LIST = retrieveEnvVariable('USE_SNIPE_LIST', logger) === 'true';
-const SNIPE_LIST_REFRESH_INTERVAL = Number(
-  retrieveEnvVariable('SNIPE_LIST_REFRESH_INTERVAL', logger),
-);
+const SNIPE_LIST_REFRESH_INTERVAL = Number(retrieveEnvVariable('SNIPE_LIST_REFRESH_INTERVAL', logger));
+const AUTO_SELL = retrieveEnvVariable('AUTO_SELL', logger) === 'true';
+const SELL_DELAY = Number(retrieveEnvVariable('SELL_DELAY', logger));
+const MAX_SELL_RETRIES = 60;
+
 let snipeList: string[] = [];
 
 async function init(): Promise<void> {
@@ -134,9 +122,7 @@ async function init(): Promise<void> {
       break;
     }
     default: {
-      throw new Error(
-        `Unsupported quote mint "${QUOTE_MINT}". Supported values are USDC and WSOL`,
-      );
+      throw new Error(`Unsupported quote mint "${QUOTE_MINT}". Supported values are USDC and WSOL`);
     }
   }
 
@@ -145,29 +131,19 @@ async function init(): Promise<void> {
   );
 
   // check existing wallet for associated token account of quote mint
-  const tokenAccounts = await getTokenAccounts(
-    solanaConnection,
-    wallet.publicKey,
-    commitment,
-  );
+  const tokenAccounts = await getTokenAccounts(solanaConnection, wallet.publicKey, commitment);
 
   for (const ta of tokenAccounts) {
-    existingTokenAccounts.set(ta.accountInfo.mint.toString(), <
-      MinimalTokenAccountData
-      >{
-        mint: ta.accountInfo.mint,
-        address: ta.pubkey,
-      });
+    existingTokenAccounts.set(ta.accountInfo.mint.toString(), <MinimalTokenAccountData>{
+      mint: ta.accountInfo.mint,
+      address: ta.pubkey,
+    });
   }
 
-  const tokenAccount = tokenAccounts.find(
-    (acc) => acc.accountInfo.mint.toString() === quoteToken.mint.toString(),
-  )!;
+  const tokenAccount = tokenAccounts.find((acc) => acc.accountInfo.mint.toString() === quoteToken.mint.toString())!;
 
   if (!tokenAccount) {
-    throw new Error(
-      `No ${quoteToken.symbol} token account found in wallet: ${wallet.publicKey}`,
-    );
+    throw new Error(`No ${quoteToken.symbol} token account found in wallet: ${wallet.publicKey}`);
   }
 
   quoteTokenAssociatedAddress = tokenAccount.pubkey;
@@ -191,10 +167,7 @@ function saveTokenAccount(mint: PublicKey, accountData: MinimalMarketLayoutV3) {
   return tokenAccount;
 }
 
-export async function processRaydiumPool(
-  id: PublicKey,
-  poolState: LiquidityStateV4,
-) {
+export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStateV4) {
   try {
     if (!shouldBuy(poolState.baseMint.toString())) {
       return;
@@ -202,30 +175,20 @@ export async function processRaydiumPool(
 
     await buy(id, poolState);
 
-
-    const AUTO_SELL = retrieveEnvVariable('AUTO_SELL', logger);
-    if (AUTO_SELL === 'true') {
-      // wait for a bit before selling
-      const SELL_DELAY = retrieveEnvVariable('SELL_DELAY', logger);
-      const timeout = parseInt(SELL_DELAY, 10);
-      await new Promise((resolve) => setTimeout(resolve, timeout));
-
-      let poolKeys = existingTokenAccounts.get(poolState.baseMint.toString())!.poolKeys;
-      await sell(id, poolState, poolKeys as LiquidityPoolKeys);
+    if (AUTO_SELL) {
+      await new Promise((resolve) => setTimeout(resolve, SELL_DELAY));
+      const poolKeys = existingTokenAccounts.get(poolState.baseMint.toString())!.poolKeys;
+      await sell(poolState, poolKeys as LiquidityPoolKeys);
     }
   } catch (e) {
     logger.error({ ...poolState, error: e }, `Failed to process pool`);
   }
 }
 
-export async function processOpenBookMarket(
-  updatedAccountInfo: KeyedAccountInfo,
-) {
+export async function processOpenBookMarket(updatedAccountInfo: KeyedAccountInfo) {
   let accountData: MarketStateV3 | undefined;
   try {
-    accountData = MARKET_STATE_LAYOUT_V3.decode(
-      updatedAccountInfo.accountInfo.data,
-    );
+    accountData = MARKET_STATE_LAYOUT_V3.decode(updatedAccountInfo.accountInfo.data);
 
     // to be competitive, we collect market data before buying the token...
     if (existingTokenAccounts.has(accountData.baseMint.toString())) {
@@ -238,27 +201,16 @@ export async function processOpenBookMarket(
   }
 }
 
-async function buy(
-  accountId: PublicKey,
-  accountData: LiquidityStateV4,
-): Promise<void> {
+async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise<void> {
   let tokenAccount = existingTokenAccounts.get(accountData.baseMint.toString());
 
   if (!tokenAccount) {
     // it's possible that we didn't have time to fetch open book data
-    const market = await getMinimalMarketV3(
-      solanaConnection,
-      accountData.marketId,
-      commitment,
-    );
+    const market = await getMinimalMarketV3(solanaConnection, accountData.marketId, commitment);
     tokenAccount = saveTokenAccount(accountData.baseMint, market);
   }
 
-  tokenAccount.poolKeys = createPoolKeys(
-    accountId,
-    accountData,
-    tokenAccount.market!,
-  );
+  tokenAccount.poolKeys = createPoolKeys(accountId, accountData, tokenAccount.market!);
   const { innerTransaction, address } = Liquidity.makeSwapFixedInInstruction(
     {
       poolKeys: tokenAccount.poolKeys,
@@ -293,13 +245,10 @@ async function buy(
   }).compileToV0Message();
   const transaction = new VersionedTransaction(messageV0);
   transaction.sign([wallet, ...innerTransaction.signers]);
-  const signature = await solanaConnection.sendRawTransaction(
-    transaction.serialize(),
-    {
-      maxRetries: 20,
-      preflightCommitment: commitment,
-    },
-  );
+  const signature = await solanaConnection.sendRawTransaction(transaction.serialize(), {
+    maxRetries: 20,
+    preflightCommitment: commitment,
+  });
   logger.info(
     {
       mint: accountData.baseMint,
@@ -309,24 +258,19 @@ async function buy(
   );
 }
 
-const maxRetries = 60;
-async function sell(
-  accountId: PublicKey,
-  accountData: LiquidityStateV4,
-  poolKeys: LiquidityPoolKeys,
-): Promise<void> {
-  const tokenAccount = existingTokenAccounts.get(
-    accountData.baseMint.toString(),
-  );
+async function sell(accountData: LiquidityStateV4, poolKeys: LiquidityPoolKeys): Promise<void> {
+  const tokenAccount = existingTokenAccounts.get(accountData.baseMint.toString());
 
   if (!tokenAccount) {
     return;
   }
+
   let retries = 0;
   let balanceFound = false;
-  while (retries < maxRetries) {
+  while (retries < MAX_SELL_RETRIES) {
     try {
       const balanceResponse = (await solanaConnection.getTokenAccountBalance(tokenAccount.address)).value.amount;
+
       if (balanceResponse !== null && Number(balanceResponse) > 0 && !balanceFound) {
         balanceFound = true;
 
@@ -353,18 +297,16 @@ async function sell(
           instructions: [
             ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }),
             ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200000 }),
+            createCloseAccountInstruction(tokenAccount.address, wallet.publicKey, wallet.publicKey),
             ...innerTransaction.instructions,
           ],
         }).compileToV0Message();
         const transaction = new VersionedTransaction(messageV0);
         transaction.sign([wallet, ...innerTransaction.signers]);
-        const signature = await solanaConnection.sendRawTransaction(
-          transaction.serialize(),
-          {
-            maxRetries: 5,
-            preflightCommitment: commitment,
-          },
-        );
+        const signature = await solanaConnection.sendRawTransaction(transaction.serialize(), {
+          maxRetries: 5,
+          preflightCommitment: commitment,
+        });
         logger.info(
           {
             mint: accountData.baseMint,
@@ -375,13 +317,12 @@ async function sell(
         break;
       }
     } catch (error) {
-      // logger.error(`Error while selling: ${error}`);
+      // ignored
     }
     retries++;
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }
-
 
 function loadSnipeList() {
   if (!USE_SNIPE_LIST) {
@@ -411,9 +352,7 @@ const runListener = async () => {
     RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
     async (updatedAccountInfo) => {
       const key = updatedAccountInfo.accountId.toString();
-      const poolState = LIQUIDITY_STATE_LAYOUT_V4.decode(
-        updatedAccountInfo.accountInfo.data,
-      );
+      const poolState = LIQUIDITY_STATE_LAYOUT_V4.decode(updatedAccountInfo.accountInfo.data);
       const poolOpenTime = parseInt(poolState.poolOpenTime.toString());
       const existing = existingLiquidityPools.has(key);
 
@@ -470,7 +409,6 @@ const runListener = async () => {
 
   logger.info(`Listening for raydium changes: ${raydiumSubscriptionId}`);
   logger.info(`Listening for open book changes: ${openBookSubscriptionId}`);
-
 
   if (USE_SNIPE_LIST) {
     setInterval(loadSnipeList, SNIPE_LIST_REFRESH_INTERVAL);

@@ -31,6 +31,7 @@ import {
 } from './liquidity';
 import { retrieveEnvVariable } from './utils';
 import { getMinimalMarketV3, MinimalMarketLayoutV3 } from './market';
+import { MintLayout } from "./types";
 import pino from 'pino';
 import bs58 from 'bs58';
 import * as fs from 'fs';

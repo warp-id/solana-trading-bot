@@ -129,9 +129,5 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-
+# JetBrains
 .idea
-TODO
-
-# pnpm 
-pnpm-lock.yaml

@@ -40,6 +40,15 @@ You can update the list while script is running. Script will check for new value
 Pool must not exist before the script starts.
 It will buy only when new pool is open for trading. If you want to buy token that will be launched in the future, make sure that script is running before the launch.
 
+## Auto Sell
+By default, auto sell is disabled. If you want to enable it, you need to:
+- Change variable `AUTO_SELL` to `true`
+- Update `SELL_DELAY` to the number of milliseconds you want to wait before selling the token
+
+This will sell the token after the specified delay. (+- RPC node speed)
+
+This feature is **experimental** and should be used with caution. Make sure you understand the risks before enabling it. There is no guarantee that the token will be sold at a profit or even sold at all. The developer is not responsible for any losses incurred by using this feature.
+
 ## Common issues
 If you have an error which is not listed here, please create a new issue in this repository.
 

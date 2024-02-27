@@ -297,7 +297,7 @@ async function sell(accountData: LiquidityStateV4, poolKeys: LiquidityPoolKeys):
           instructions: [
             ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }),
             ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200000 }),
-            createCloseAccountInstruction(tokenAccount.address, wallet.publicKey, wallet.publicKey),
+            createAssociatedTokenAccountIdempotentInstruction(wallet.publicKey, tokenAccount.address, wallet.publicKey, accountData.baseMint),
             ...innerTransaction.instructions,
           ],
         }).compileToV0Message();

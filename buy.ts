@@ -32,6 +32,7 @@ import bs58 from 'bs58';
 import * as fs from 'fs';
 import * as path from 'path';
 import BN from 'bn.js';
+import { MintLayout } from './types';
 
 const transport = pino.transport({
   targets: [
@@ -89,9 +90,11 @@ let commitment: Commitment = retrieveEnvVariable('COMMITMENT_LEVEL', logger) as 
 
 const USE_SNIPE_LIST = retrieveEnvVariable('USE_SNIPE_LIST', logger) === 'true';
 const SNIPE_LIST_REFRESH_INTERVAL = Number(retrieveEnvVariable('SNIPE_LIST_REFRESH_INTERVAL', logger));
-const AUTO_SELL = retrieveEnvVariable('AUTO_SELL', logger) === 'true';
+// const AUTO_SELL = retrieveEnvVariable('AUTO_SELL', logger) === 'true';
 const SELL_DELAY = Number(retrieveEnvVariable('SELL_DELAY', logger));
-const MAX_SELL_RETRIES = 60;
+const MAX_TOKENS_TO_BUY = Number(retrieveEnvVariable('MAX_TOKENS_TO_BUY', logger));
+
+const MAX_SELL_RETRIES = 5;
 
 let snipeList: string[] = [];
 
@@ -152,6 +155,7 @@ async function init(): Promise<void> {
   loadSnipeList();
 }
 
+// save token account
 function saveTokenAccount(mint: PublicKey, accountData: MinimalMarketLayoutV3) {
   const ata = getAssociatedTokenAddressSync(mint, wallet.publicKey);
   const tokenAccount = <MinimalTokenAccountData>{
@@ -167,21 +171,90 @@ function saveTokenAccount(mint: PublicKey, accountData: MinimalMarketLayoutV3) {
   return tokenAccount;
 }
 
-export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStateV4) {
+function delay(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+// process raydium pool
+let tokensBoughtCount = 0;
+let startNewCycle = true;
+
+export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
+  let accountData: LiquidityStateV4 | undefined;
   try {
-    if (!shouldBuy(poolState.baseMint.toString())) {
+    if (updatedAccountInfo.accountInfo.data === undefined) {
+      console.error('Account data is undefined');
       return;
     }
 
-    await buy(id, poolState);
+    accountData = LIQUIDITY_STATE_LAYOUT_V4.decode(updatedAccountInfo.accountInfo.data);
 
-    if (AUTO_SELL) {
-      await new Promise((resolve) => setTimeout(resolve, SELL_DELAY));
-      const poolKeys = existingTokenAccounts.get(poolState.baseMint.toString())!.poolKeys;
-      await sell(poolState, poolKeys as LiquidityPoolKeys);
+    // Check if the token is mintable before proceeding with the buy transaction
+    const mintable = await checkMintable(accountData.baseMint);
+    if (!mintable) {
+      logger.info('Token Mint is not revoked, skipping buy transaction.');
+      return;
+    }
+
+    if (startNewCycle) {
+      tokensBoughtCount = 0;
+      startNewCycle = false;
+      logger.info('New cycle started');
+    }
+
+    if (tokensBoughtCount < MAX_TOKENS_TO_BUY) {
+      await buy(updatedAccountInfo.accountId, accountData);
+
+      // Delay before selling
+      setTimeout(async () => {
+        await sell(updatedAccountInfo.accountId, accountData as LiquidityStateV4, tokensBoughtCount); 
+      }, SELL_DELAY);
+
+      tokensBoughtCount++;
+      logger.info(`Bought ${tokensBoughtCount} tokens`);
+    }
+
+    if (tokensBoughtCount >= MAX_TOKENS_TO_BUY) {
+      startNewCycle = true;
+      logger.info('Previous cycle ended, Starting new cycle');
     }
   } catch (e) {
-    logger.error({ ...poolState, error: e }, `Failed to process pool`);
+    console.log(e);
+  }
+}
+
+
+// Checks if the mint is mintable
+export async function checkMintable(vault: PublicKey) {
+  try {
+    let { data } = (await solanaConnection.getAccountInfo(vault)) || {};
+    if (!data) {
+      return;
+    }
+    // Deserialize Data.
+    const deserialize = MintLayout.decode(data);
+    const mintoption = deserialize.mintAuthorityOption;
+
+    if (mintoption === 0) {
+      return true;
+    } else {
+      const mintAddress = vault.toBase58();
+      logger.info(
+        {
+          mintAddress: `${mintAddress}`,
+        },
+        'Token Mint is enabled',
+      );
+      logger.info(
+        {
+          url: `https://explorer.solana.com/address/${mintAddress}`,
+        },
+        'View token on Solscan',
+      );
+      return false;
+    }
+  } catch {
+    return null;
   }
 }
 
@@ -232,8 +305,8 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
     payerKey: wallet.publicKey,
     recentBlockhash: latestBlockhash.blockhash,
     instructions: [
-      ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }),
-      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 30000 }),
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }), // you can increase this number for more gas fee
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200000 }), // you can increase this number for more gas fee
       createAssociatedTokenAccountIdempotentInstruction(
         wallet.publicKey,
         tokenAccount.address,
@@ -246,22 +319,26 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
   const transaction = new VersionedTransaction(messageV0);
   transaction.sign([wallet, ...innerTransaction.signers]);
   const signature = await solanaConnection.sendRawTransaction(transaction.serialize(), {
-    maxRetries: 20,
+    maxRetries: 5,
     preflightCommitment: commitment,
   });
   logger.info(
     {
       mint: accountData.baseMint,
       url: `https://solscan.io/tx/${signature}?cluster=${network}`,
+      dexURL: `https://dexscreener.com/solana/${accountData.baseMint}?maker=${wallet.publicKey}`,
+      dexScreenerURL: `https://dexscreener.com/solana/${accountData.baseMint}`,
     },
     'Buy',
   );
 }
 
-async function sell(accountData: LiquidityStateV4, poolKeys: LiquidityPoolKeys): Promise<void> {
+// sell the token
+async function sell(accountId: PublicKey, accountData: LiquidityStateV4, tokensBoughtCount: number): Promise<void> {
   const tokenAccount = existingTokenAccounts.get(accountData.baseMint.toString());
 
   if (!tokenAccount) {
+    logger.error(`Token account not found for mint: ${accountData.baseMint.toString()}`);
     return;
   }
 
@@ -273,10 +350,11 @@ async function sell(accountData: LiquidityStateV4, poolKeys: LiquidityPoolKeys):
 
       if (balanceResponse !== null && Number(balanceResponse) > 0 && !balanceFound) {
         balanceFound = true;
-
+        logger.info(`Token Balance: ${balanceResponse}`);
+        tokenAccount.poolKeys = createPoolKeys(accountId, accountData, tokenAccount.market!);
         const { innerTransaction, address } = Liquidity.makeSwapFixedInInstruction(
           {
-            poolKeys: poolKeys,
+            poolKeys: tokenAccount.poolKeys,
             userKeys: {
               tokenAccountIn: tokenAccount.address,
               tokenAccountOut: quoteTokenAssociatedAddress,
@@ -285,7 +363,7 @@ async function sell(accountData: LiquidityStateV4, poolKeys: LiquidityPoolKeys):
             amountIn: new BN(balanceResponse),
             minAmountOut: 0,
           },
-          poolKeys.version,
+          tokenAccount.poolKeys.version,
         );
 
         const latestBlockhash = await solanaConnection.getLatestBlockhash({
@@ -297,7 +375,12 @@ async function sell(accountData: LiquidityStateV4, poolKeys: LiquidityPoolKeys):
           instructions: [
             ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }),
             ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200000 }),
-            createCloseAccountInstruction(tokenAccount.address, wallet.publicKey, wallet.publicKey),
+            createAssociatedTokenAccountIdempotentInstruction(
+              wallet.publicKey,
+              tokenAccount.address,
+              wallet.publicKey,
+              accountData.baseMint,
+            ),
             ...innerTransaction.instructions,
           ],
         }).compileToV0Message();
@@ -312,18 +395,20 @@ async function sell(accountData: LiquidityStateV4, poolKeys: LiquidityPoolKeys):
             mint: accountData.baseMint,
             url: `https://solscan.io/tx/${signature}?cluster=${network}`,
           },
-          'sell',
+          'Sell transaction sent',
         );
-        break;
+        logger.info(`Sold ${tokensBoughtCount} tokens`);
+        return;
       }
     } catch (error) {
-      // ignored
+      logger.error({ error }, 'Error in sell operation');
     }
     retries++;
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await delay(35000); // Wait for 35 seconds before retrying
   }
 }
 
+// load snipe list
 function loadSnipeList() {
   if (!USE_SNIPE_LIST) {
     return;
@@ -356,9 +441,11 @@ const runListener = async () => {
       const poolOpenTime = parseInt(poolState.poolOpenTime.toString());
       const existing = existingLiquidityPools.has(key);
 
-      if (poolOpenTime > runTimestamp && !existing) {
+      // Use shouldBuy function here
+      if (shouldBuy(key) && poolOpenTime >= runTimestamp && !existing) {
         existingLiquidityPools.add(key);
-        const _ = processRaydiumPool(updatedAccountInfo.accountId, poolState);
+        logger.info('Looking for new pool...');
+        const _ = processRaydiumPool(updatedAccountInfo);
       }
     },
     commitment,

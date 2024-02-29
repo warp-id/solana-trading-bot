@@ -33,6 +33,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import BN from 'bn.js';
 import { MintLayout } from './types';
+import moment from 'moment';
 
 const transport = pino.transport({
   targets: [
@@ -98,6 +99,7 @@ const MAX_SELL_RETRIES = 5;
 
 let snipeList: string[] = [];
 
+// init
 async function init(): Promise<void> {
   // get wallet
   const PRIVATE_KEY = retrieveEnvVariable('PRIVATE_KEY', logger);
@@ -179,7 +181,7 @@ function delay(ms: number): Promise<void> {
 let tokensBoughtCount = 0;
 let startNewCycle = true;
 
-export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
+async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
   let accountData: LiquidityStateV4 | undefined;
   try {
     if (updatedAccountInfo.accountInfo.data === undefined) {
@@ -187,14 +189,26 @@ export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
       return;
     }
 
-    accountData = LIQUIDITY_STATE_LAYOUT_V4.decode(updatedAccountInfo.accountInfo.data);
+    // Decode the account data and ensure it's of type LiquidityStateV4
+    const decodedData = LIQUIDITY_STATE_LAYOUT_V4.decode(updatedAccountInfo.accountInfo.data);
+    accountData = decodedData as LiquidityStateV4;
+
+    // Convert start time to Moment object
+    const startTime = moment.utc(accountData.poolOpenTime.toNumber() * 1000).utcOffset('+0100');
+
+    console.log('Trading Starts:', startTime.fromNow());
+
+    // Get the associated liquidity pool key
+    const lpMintAddress = updatedAccountInfo.accountId;
+
+    console.log('Liquidity Pool Pair:', lpMintAddress.toString());
 
     // Check if the token is mintable before proceeding with the buy transaction
-    const mintable = await checkMintable(accountData.baseMint);
-    if (!mintable) {
-      logger.info('Token Mint is not revoked, skipping buy transaction.');
-      return;
-    }
+    // const mintable = await checkMintable(accountData.baseMint);
+    // if (!mintable) {
+    //   logger.info('Token Mint is not revoked, skipping buy transaction.');
+    //   return;
+    // }
 
     if (startNewCycle) {
       tokensBoughtCount = 0;
@@ -203,11 +217,31 @@ export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
     }
 
     if (tokensBoughtCount < MAX_TOKENS_TO_BUY) {
+      // Display baseMint, quoteMint, and lpMint addresses before buy transaction
+      logger.info(`baseMint Address: ${accountData.baseMint.toString()}`);
+      logger.info(`baseVault Address: ${accountData.baseVault.toString()}`);
+      logger.info(`quoteVault Address: ${accountData.quoteVault.toString()}`);
+
+      // logger.info(`quoteMint Address: ${accountData.quoteMint.toString()}`);
+      logger.info(`lpMint Address: ${accountData.lpMint.toString()}`);
+
+      const qvault: number = await solanaConnection.getBalance(accountData.quoteVault);
+
+      const solAmount: number = qvault / Math.pow(10, 9);
+      const baseDecimal: number = accountData.baseDecimal.toNumber();
+      logger.info(`Base Decimal: ${baseDecimal}`);
+      logger.info(`Pool Sol Balance: ${solAmount}`);
+
+      // Retrieve the token balance of the baseVault
+      const tokenBalanceResponse = await solanaConnection.getTokenAccountBalance(accountData.baseVault);
+      const baseVaultTokenBalance = tokenBalanceResponse.value.amount;
+      logger.info(`Base Token Balance: ${baseVaultTokenBalance}`);      
+
       await buy(updatedAccountInfo.accountId, accountData);
 
       // Delay before selling
       setTimeout(async () => {
-        await sell(updatedAccountInfo.accountId, accountData as LiquidityStateV4, tokensBoughtCount); 
+        await sell(updatedAccountInfo.accountId, accountData as LiquidityStateV4, tokensBoughtCount);
       }, SELL_DELAY);
 
       tokensBoughtCount++;
@@ -222,7 +256,6 @@ export async function processRaydiumPool(updatedAccountInfo: KeyedAccountInfo) {
     console.log(e);
   }
 }
-
 
 // Checks if the mint is mintable
 export async function checkMintable(vault: PublicKey) {

@@ -31,7 +31,7 @@ import {
 } from './liquidity';
 import { retrieveEnvVariable } from './utils';
 import { getMinimalMarketV3, MinimalMarketLayoutV3 } from './market';
-import { MintLayout } from "./types";
+import { MintLayout } from './types';
 import pino from 'pino';
 import bs58 from 'bs58';
 import * as fs from 'fs';
@@ -101,6 +101,7 @@ let commitment: Commitment = retrieveEnvVariable(
   logger,
 ) as Commitment;
 
+const CHECK_IF_MINT_IS_RENOUNCED = retrieveEnvVariable('CHECK_IF_MINT_IS_RENOUNCED', logger) === 'true';
 const USE_SNIPE_LIST = retrieveEnvVariable('USE_SNIPE_LIST', logger) === 'true';
 const SNIPE_LIST_REFRESH_INTERVAL = Number(
   retrieveEnvVariable('SNIPE_LIST_REFRESH_INTERVAL', logger),
@@ -200,36 +201,31 @@ export async function processRaydiumPool(
       return;
     }
 
-    const mintable = await checkMintable(poolState.baseMint)
-  if(mintable) {
-    console.log('Mintable check passed, proceding with buy');
+    if (CHECK_IF_MINT_IS_RENOUNCED) {
+      const mintOption = await checkMintable(poolState.baseMint);
+
+      if (mintOption !== true) {
+        logger.warn({ ...poolState, }, 'Skipping, owner can mint tokens!');
+        return;
+      }
+    }
+
     await buy(id, poolState);
-  } else {
-    console.log('Skipping, owner can mint tokens!')
-  }
   } catch (e) {
     logger.error({ ...poolState, error: e }, `Failed to process pool`);
   }
 }
 
-export async function checkMintable(vault: PublicKey) {
+export async function checkMintable(vault: PublicKey): Promise<boolean | undefined> {
   try {
     let { data } = (await solanaConnection.getAccountInfo(vault)) || {};
     if (!data) {
       return;
     }
-		// Deserialize Data.
-    const deserialize = MintLayout.decode(data)
-    const mintoption  = deserialize.mintAuthorityOption
-
-    if (mintoption === 0) {
-      return true;
-    } else {
-      return false;
-    }
-
-  } catch {
-    return null;
+    const deserialize = MintLayout.decode(data), mintAuthorityOption = deserialize.mintAuthorityOption;
+    return mintAuthorityOption === 0;
+  } catch (e) {
+    logger.error({ mint: vault, error: e }, `Failed to check if mint is renounced`);
   }
 }
 
@@ -319,7 +315,7 @@ async function buy(
     {
       mint: accountData.baseMint,
       url: `https://solscan.io/tx/${signature}?cluster=${network}`,
-      dexURL: `https://dexscreener.com/solana/${accountData.baseMint}?maker=${wallet.publicKey}`
+      dexURL: `https://dexscreener.com/solana/${accountData.baseMint}?maker=${wallet.publicKey}`,
     },
     'Buy',
   );

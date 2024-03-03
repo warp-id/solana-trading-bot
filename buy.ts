@@ -27,6 +27,7 @@ import {
 import { getTokenAccounts, RAYDIUM_LIQUIDITY_PROGRAM_ID_V4, OPENBOOK_PROGRAM_ID, createPoolKeys } from './liquidity';
 import { retrieveEnvVariable } from './utils';
 import { getMinimalMarketV3, MinimalMarketLayoutV3 } from './market';
+import { MintLayout } from './types';
 import pino from 'pino';
 import bs58 from 'bs58';
 import * as fs from 'fs';
@@ -87,6 +88,7 @@ let quoteTokenAssociatedAddress: PublicKey;
 let quoteAmount: TokenAmount;
 let commitment: Commitment = retrieveEnvVariable('COMMITMENT_LEVEL', logger) as Commitment;
 
+const CHECK_IF_MINT_IS_RENOUNCED = retrieveEnvVariable('CHECK_IF_MINT_IS_RENOUNCED', logger) === 'true';
 const USE_SNIPE_LIST = retrieveEnvVariable('USE_SNIPE_LIST', logger) === 'true';
 const SNIPE_LIST_REFRESH_INTERVAL = Number(retrieveEnvVariable('SNIPE_LIST_REFRESH_INTERVAL', logger));
 const AUTO_SELL = retrieveEnvVariable('AUTO_SELL', logger) === 'true';
@@ -173,6 +175,15 @@ export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStat
       return;
     }
 
+    if (CHECK_IF_MINT_IS_RENOUNCED) {
+      const mintOption = await checkMintable(poolState.baseMint);
+
+      if (mintOption !== true) {
+        logger.warn({ ...poolState, }, 'Skipping, owner can mint tokens!');
+        return;
+      }
+    }
+
     await buy(id, poolState);
 
     if (AUTO_SELL) {
@@ -185,7 +196,22 @@ export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStat
   }
 }
 
-export async function processOpenBookMarket(updatedAccountInfo: KeyedAccountInfo) {
+export async function checkMintable(vault: PublicKey): Promise<boolean | undefined> {
+  try {
+    let { data } = (await solanaConnection.getAccountInfo(vault)) || {};
+    if (!data) {
+      return;
+    }
+    const deserialize = MintLayout.decode(data), mintAuthorityOption = deserialize.mintAuthorityOption;
+    return mintAuthorityOption === 0;
+  } catch (e) {
+    logger.error({ mint: vault, error: e }, `Failed to check if mint is renounced`);
+  }
+}
+
+export async function processOpenBookMarket(
+  updatedAccountInfo: KeyedAccountInfo,
+) {
   let accountData: MarketStateV3 | undefined;
   try {
     accountData = MARKET_STATE_LAYOUT_V3.decode(updatedAccountInfo.accountInfo.data);
@@ -253,6 +279,7 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
     {
       mint: accountData.baseMint,
       url: `https://solscan.io/tx/${signature}?cluster=${network}`,
+      dexURL: `https://dexscreener.com/solana/${accountData.baseMint}?maker=${wallet.publicKey}`,
     },
     'Buy',
   );

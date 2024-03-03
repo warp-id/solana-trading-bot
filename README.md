@@ -20,6 +20,7 @@ In order to run the script you need to:
   - COMMITMENT_LEVEL
   - USE_SNIPE_LIST (buy only tokens listed in snipe-list.txt)
   - SNIPE_LIST_REFRESH_INTERVAL (how often snipe list should be refreshed in milliseconds)
+  - CHECK_IF_MINT_IS_RENOUNCED (script will buy only if mint is renounced)
 - Install dependencies by typing: `npm install`
 - Run the script by typing: `npm run buy` in terminal
 

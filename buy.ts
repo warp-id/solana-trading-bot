@@ -324,8 +324,8 @@ async function sell(accountData: LiquidityStateV4, poolKeys: LiquidityPoolKeys):
           instructions: [
             ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }),
             ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200000 }),
-            createCloseAccountInstruction(tokenAccount.address, wallet.publicKey, wallet.publicKey),
             ...innerTransaction.instructions,
+            createCloseAccountInstruction(tokenAccount.address, wallet.publicKey, wallet.publicKey),
           ],
         }).compileToV0Message();
         const transaction = new VersionedTransaction(messageV0);

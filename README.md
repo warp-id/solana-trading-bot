@@ -42,13 +42,11 @@ Pool must not exist before the script starts.
 It will buy only when new pool is open for trading. If you want to buy token that will be launched in the future, make sure that script is running before the launch.
 
 ## Auto Sell
-By default, auto sell is disabled. If you want to enable it, you need to:
-- Change variable `AUTO_SELL` to `true`
-- Update `SELL_DELAY` to the number of milliseconds you want to wait before selling the token
+By default, auto sell is enabled. If you want to disable it, you need to:
+- Change variable `AUTO_SELL` to `false`
+- Update `MAX_SELL_RETRIES` to set the maximum number of retries for selling token
 
-This will sell the token after the specified delay. (+- RPC node speed)
-
-This feature is **experimental** and should be used with caution. Make sure you understand the risks before enabling it. There is no guarantee that the token will be sold at a profit or even sold at all. The developer is not responsible for any losses incurred by using this feature.
+Token will be sold immediately after it is bought.
 
 ## Common issues
 If you have an error which is not listed here, please create a new issue in this repository.
@@ -72,3 +70,7 @@ If you have an error which is not listed here, please create a new issue in this
 
 ## Contact
 [![](https://img.shields.io/discord/1201826085655023616?color=5865F2&logo=Discord&style=flat-square)](https://discord.gg/xYUETCA2aP)
+
+## Disclaimer
+
+Use this script at your own risk.

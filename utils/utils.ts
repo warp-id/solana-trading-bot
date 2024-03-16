@@ -1,5 +1,6 @@
-import { Logger } from "pino";
+import { Logger } from 'pino';
 import dotenv from 'dotenv';
+
 dotenv.config();
 
 export const retrieveEnvVariable = (variableName: string, logger: Logger) => {
@@ -9,4 +10,4 @@ export const retrieveEnvVariable = (variableName: string, logger: Logger) => {
     process.exit(1);
   }
   return variable;
-}
+};

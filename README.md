@@ -5,6 +5,8 @@ This code is written as proof of concept to demonstrate how we can buy new token
 Script listens to new Raydium USDC or SOL pools and buys tokens for a fixed amount in USDC/SOL.  
 Depending on the speed of the RPC node, the purchase usually happens before the token is available on Raydium UI for swapping.
 
+This is provided as is, for learning purposes.
+
 ## Setup
 To run the script you need to:
 - Create a new empty Solana wallet

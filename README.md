@@ -1,16 +1,16 @@
 
-# Solana Sniper Bot
-This code is written as proof of concept for demonstrating how we can buy new tokens immediately after liquidity pool is open for trading.
+# Solana Sniper Bot (Poc)
+This code is written as proof of concept to demonstrate how we can buy new tokens immediately after the liquidity pool is open for trading.
 
-Script listens to new raydium USDC/SOL pools and buys token for a fixed amount in USDC/SOL.  
-Depending on speed of RPC node, the purchase usually happens before token is available on Raydium UI for swapping.
+Script listens to new Raydium USDC or SOL pools and buys tokens for a fixed amount in USDC/SOL.  
+Depending on the speed of the RPC node, the purchase usually happens before the token is available on Raydium UI for swapping.
 
 ## Setup
-In order to run the script you need to:
+To run the script you need to:
 - Create a new empty Solana wallet
 - Transfer some SOL to it.
 - Convert some SOL to USDC or WSOL.
-  - You need USDC or WSOL depending on configuration set below.
+  - You need USDC or WSOL depending on the configuration set below.
 - Configure the script by updating `.env.copy` file (remove the .copy from the file name when done).
   - PRIVATE_KEY (your wallet private key)
   - RPC_ENDPOINT (https RPC endpoint)
@@ -28,7 +28,7 @@ You should see the following output:
 ![output](output.png)
 
 ## Snipe list
-By default, script buys each token which has new liquidity pool created and open for trading. 
+By default, script buys each token which has a new liquidity pool created and open for trading. 
 There are scenarios when you want to buy one specific token as soon as possible during the launch event.
 To achieve this, you'll have to use snipe list.
 - Change variable `USE_SNIPE_LIST` to `true`

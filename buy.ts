@@ -370,7 +370,8 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
 
       logger.info(
         { mint, signature, url: `https://solscan.io/tx/${signature}?cluster=${network}` },
-        `Confirmed sell tx`,
+        `Confirmed sell tx,
+        \x1b[35mhttps://dexscreener.com/solana/${mint}?maker=${wallet.publicKey}\x1b[0m`,
       );
       sold = true;
     } catch (e: any) {

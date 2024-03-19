@@ -47,11 +47,16 @@ It will buy only when new pool is open for trading. If you want to buy token tha
 By default, auto sell is enabled. If you want to disable it, you need to:
 - Change variable `AUTO_SELL` to `false`
 - Update `MAX_SELL_RETRIES` to set the maximum number of retries for selling token
+- Update `SELL_DELAY` to the number of milliseconds you want to wait before selling the token
+  - This will sell the token after the specified delay. (+- RPC node speed)
 
-Token will be sold immediately after it is bought.
+If you set SELL_DELAY to 0, token will be sold immediately after it is bought.
+
+There is no guarantee that the token will be sold at a profit or even sold at all. The developer is not responsible for any losses incurred by using this feature.
 
 ## Common issues
 If you have an error which is not listed here, please create a new issue in this repository.
+To collect more information on an issue, please change `LOG_LEVEL` to `debug`.
 
 ### Empty transaction
 - If you see empty transactions on SolScan most likely fix is to change commitment level to `finalized`.

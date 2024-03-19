@@ -36,21 +36,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const transport = pino.transport({
-  targets: [
-    // {
-    //   level: 'trace',
-    //   target: 'pino/file',
-    //   options: {
-    //     destination: 'buy.log',
-    //   },
-    // },
-
-    {
-      level: 'info',
-      target: 'pino-pretty',
-      options: {},
-    },
-  ],
+  target: 'pino-pretty',
 });
 
 export const logger = pino(
@@ -68,6 +54,7 @@ export const logger = pino(
 const network = 'mainnet-beta';
 const RPC_ENDPOINT = retrieveEnvVariable('RPC_ENDPOINT', logger);
 const RPC_WEBSOCKET_ENDPOINT = retrieveEnvVariable('RPC_WEBSOCKET_ENDPOINT', logger);
+const LOG_LEVEL = retrieveEnvVariable('LOG_LEVEL', logger);
 
 const solanaConnection = new Connection(RPC_ENDPOINT, {
   wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
@@ -95,10 +82,13 @@ const USE_SNIPE_LIST = retrieveEnvVariable('USE_SNIPE_LIST', logger) === 'true';
 const SNIPE_LIST_REFRESH_INTERVAL = Number(retrieveEnvVariable('SNIPE_LIST_REFRESH_INTERVAL', logger));
 const AUTO_SELL = retrieveEnvVariable('AUTO_SELL', logger) === 'true';
 const MAX_SELL_RETRIES = Number(retrieveEnvVariable('MAX_SELL_RETRIES', logger));
+const AUTO_SELL_DELAY = Number(retrieveEnvVariable('AUTO_SELL_DELAY', logger));
 
 let snipeList: string[] = [];
 
 async function init(): Promise<void> {
+  logger.level = LOG_LEVEL;
+
   // get wallet
   const PRIVATE_KEY = retrieveEnvVariable('PRIVATE_KEY', logger);
   wallet = Keypair.fromSecretKey(bs58.decode(PRIVATE_KEY));
@@ -298,6 +288,10 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
   let sold = false;
   let retries = 0;
 
+  if (AUTO_SELL_DELAY > 0) {
+    await new Promise((resolve) => setTimeout(resolve, AUTO_SELL_DELAY));
+  }
+
   do {
     try {
       const tokenAccount = existingTokenAccounts.get(mint.toString());
@@ -308,7 +302,7 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
 
       if (!tokenAccount.poolKeys) {
         logger.warn({ mint }, 'No pool keys found');
-        continue;
+        return;
       }
 
       if (amount === 0) {
@@ -369,9 +363,13 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
       }
 
       logger.info(
-        { mint, signature, url: `https://solscan.io/tx/${signature}?cluster=${network}` },
-        `Confirmed sell tx,
-        \x1b[35mhttps://dexscreener.com/solana/${mint}?maker=${wallet.publicKey}\x1b[0m`,
+        {
+          dex: `https://dexscreener.com/solana/${mint}?maker=${wallet.publicKey}`,
+          mint,
+          signature,
+          url: `https://solscan.io/tx/${signature}?cluster=${network}`,
+        },
+        `Confirmed sell tx`,
       );
       sold = true;
     } catch (e: any) {

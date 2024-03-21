@@ -76,6 +76,7 @@ let quoteToken: Token;
 let quoteTokenAssociatedAddress: PublicKey;
 let quoteAmount: TokenAmount;
 let commitment: Commitment = retrieveEnvVariable('COMMITMENT_LEVEL', logger) as Commitment;
+let processingToken: Boolean = false;
 
 const CHECK_IF_MINT_IS_RENOUNCED = retrieveEnvVariable('CHECK_IF_MINT_IS_RENOUNCED', logger) === 'true';
 const USE_SNIPE_LIST = retrieveEnvVariable('USE_SNIPE_LIST', logger) === 'true';
@@ -83,6 +84,9 @@ const SNIPE_LIST_REFRESH_INTERVAL = Number(retrieveEnvVariable('SNIPE_LIST_REFRE
 const AUTO_SELL = retrieveEnvVariable('AUTO_SELL', logger) === 'true';
 const MAX_SELL_RETRIES = Number(retrieveEnvVariable('MAX_SELL_RETRIES', logger));
 const AUTO_SELL_DELAY = Number(retrieveEnvVariable('AUTO_SELL_DELAY', logger));
+const ONE_TOKEN_AT_A_TIME = retrieveEnvVariable('ONE_TOKEN_AT_A_TIME', logger);
+const CHECK_IF_IS_BURNED = retrieveEnvVariable('CHECK_IF_IS_BURNED', logger) === 'true';
+const CHECK_IF_IS_LOCKED = retrieveEnvVariable('CHECK_IF_IS_LOCKED', logger) === 'true';
 
 let snipeList: string[] = [];
 
@@ -171,7 +175,27 @@ export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStat
     if (mintOption !== true) {
       logger.warn({ mint: poolState.baseMint }, 'Skipping, owner can mint tokens!');
       return;
+    
     }
+  }
+  if(CHECK_IF_IS_BURNED){
+
+    const burned = await checkBurned(poolState.baseMint);
+
+    if(burned != true){
+      logger.warn({mint: poolState.baseMint},'Skipping, token doesnt burned');
+      return;
+    } 
+  }
+
+  if(CHECK_IF_IS_LOCKED){
+    const locked = await isLiquidityLocked(poolState.baseMint);
+
+    if(locked != true){
+      logger.warn({mint: poolState.baseMint},'Skipping,token doesnt locked');
+      return;
+    }
+
   }
 
   await buy(id, poolState);
@@ -190,6 +214,68 @@ export async function checkMintable(vault: PublicKey): Promise<boolean | undefin
     logger.error({ mint: vault }, `Failed to check if mint is renounced`);
   }
 }
+
+export async function checkBurned(tokenMint: PublicKey): Promise<boolean> {
+  try {
+    const tokenAccountInfo = await solanaConnection.getAccountInfo(tokenMint);
+    
+    // If the token account does not exist, we consider the token to be burned
+    if (!tokenAccountInfo) {
+      return true;
+    }
+
+    // Manually decode account data
+    const data = tokenAccountInfo.data;
+
+    // Token balance is represented by the last 8 bytes of account data
+    const tokenBalanceBuffer = data.slice(-8);
+    const tokenBalance = BigInt(`0x${tokenBalanceBuffer.toString('hex')}`);
+
+    // If the token balance is zero, we consider the token to be burned
+    if (tokenBalance === BigInt(0)) {
+      return true;
+    }
+
+    // If the token balance is greater than zero, we consider that the token has not been burned
+    return false;
+  } catch (error) {
+    logger.debug(error);
+    logger.error({ mint: tokenMint }, `Failed to check if token was burned`);
+    throw error;
+  }
+}
+
+import BN from 'bn.js';
+
+async function isLiquidityLocked(liquidityAccount: PublicKey): Promise<boolean> {
+  try {
+    const accountInfo = await solanaConnection.getAccountInfo(liquidityAccount);
+
+
+    if (!accountInfo) {
+      throw new Error(`Liquidity account not found: ${liquidityAccount.toString()}`);
+    }
+
+    const liquidityState = LIQUIDITY_STATE_LAYOUT_V4.decode(accountInfo.data);
+
+    let isLocked: boolean;
+
+    const maxSafeIntegerBN = new BN(Number.MAX_SAFE_INTEGER.toString());
+
+    if (liquidityState.status.gt(maxSafeIntegerBN)) {
+      isLocked = false;
+    } else {
+      isLocked = liquidityState.status.toNumber() === 1;
+    }
+
+    return isLocked;
+  } catch (error) {
+    console.error('Failed to check if liquidity is locked:', error);
+    throw error;
+  }
+}
+
+
 
 export async function processOpenBookMarket(updatedAccountInfo: KeyedAccountInfo) {
   let accountData: MarketStateV3 | undefined;
@@ -257,6 +343,7 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
       preflightCommitment: commitment,
     });
     logger.info({ mint: accountData.baseMint, signature }, `Sent buy tx`);
+    processingToken = true;
     const confirmation = await solanaConnection.confirmTransaction(
       {
         signature,
@@ -265,6 +352,7 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
       },
       commitment,
     );
+    logger.debug(confirmation)
     if (!confirmation.value.err) {
       logger.info(
         {
@@ -280,6 +368,7 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
     }
   } catch (e) {
     logger.debug(e);
+    processingToken = false;
     logger.error({ mint: accountData.baseMint }, `Failed to buy token`);
   }
 }
@@ -372,6 +461,7 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
         `Confirmed sell tx`,
       );
       sold = true;
+      processingToken = false;
     } catch (e: any) {
       retries++;
       logger.debug(e);
@@ -398,8 +488,10 @@ function loadSnipeList() {
 }
 
 function shouldBuy(key: string): boolean {
-  return USE_SNIPE_LIST ? snipeList.includes(key) : true;
+  logger.info(processingToken, 'Is processing token buy')
+  return USE_SNIPE_LIST ? snipeList.includes(key) : ONE_TOKEN_AT_A_TIME ? !processingToken : true
 }
+
 
 const runListener = async () => {
   await init();

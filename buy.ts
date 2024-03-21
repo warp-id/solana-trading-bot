@@ -468,6 +468,7 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
       logger.error({ mint }, `Failed to sell token, retry: ${retries}/${MAX_SELL_RETRIES}`);
     }
   } while (!sold && retries < MAX_SELL_RETRIES);
+  processingToken = false;
 }
 
 function loadSnipeList() {

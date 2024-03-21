@@ -1,3 +1,5 @@
+
+import BN from 'bn.js';
 import {
   BigNumberish,
   Liquidity,
@@ -244,8 +246,6 @@ export async function checkBurned(tokenMint: PublicKey): Promise<boolean> {
     throw error;
   }
 }
-
-import BN from 'bn.js';
 
 async function isLiquidityLocked(liquidityAccount: PublicKey): Promise<boolean> {
   try {

@@ -1,3 +1,7 @@
+/**
+ * Solana Sniper Bot 
+ */
+
 import {
   BigNumberish,
   Liquidity,
@@ -56,9 +60,7 @@ const RPC_ENDPOINT = retrieveEnvVariable('RPC_ENDPOINT', logger);
 const RPC_WEBSOCKET_ENDPOINT = retrieveEnvVariable('RPC_WEBSOCKET_ENDPOINT', logger);
 const LOG_LEVEL = retrieveEnvVariable('LOG_LEVEL', logger);
 
-const solanaConnection = new Connection(RPC_ENDPOINT, {
-  wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
-});
+var solanaConnection: any = null;
 
 export type MinimalTokenAccountData = {
   mint: PublicKey;
@@ -91,8 +93,13 @@ async function init(): Promise<void> {
 
   // get wallet
   const PRIVATE_KEY = retrieveEnvVariable('PRIVATE_KEY', logger);
-  wallet = Keypair.fromSecretKey(bs58.decode(PRIVATE_KEY));
-  logger.info(`Wallet Address: ${wallet.publicKey}`);
+  try {
+    wallet = Keypair.fromSecretKey(bs58.decode(PRIVATE_KEY));
+    logger.info(`Wallet Address: ${wallet.publicKey}`);
+  } catch (error) {
+    logger.error('error reading private key ' + error);
+    process.exit();
+  }
 
   // get quote mint and amount
   const QUOTE_MINT = retrieveEnvVariable('QUOTE_MINT', logger);
@@ -124,22 +131,28 @@ async function init(): Promise<void> {
   );
 
   // check existing wallet for associated token account of quote mint
-  const tokenAccounts = await getTokenAccounts(solanaConnection, wallet.publicKey, commitment);
+  try {
+    const tokenAccounts = await getTokenAccounts(solanaConnection, wallet.publicKey, commitment);
 
-  for (const ta of tokenAccounts) {
-    existingTokenAccounts.set(ta.accountInfo.mint.toString(), <MinimalTokenAccountData>{
-      mint: ta.accountInfo.mint,
-      address: ta.pubkey,
-    });
+    for (const ta of tokenAccounts) {
+      existingTokenAccounts.set(ta.accountInfo.mint.toString(), <MinimalTokenAccountData>{
+        mint: ta.accountInfo.mint,
+        address: ta.pubkey,
+      });
+    }
+
+    const tokenAccount = tokenAccounts.find((acc) => acc.accountInfo.mint.toString() === quoteToken.mint.toString())!;
+
+    if (!tokenAccount) {
+      throw new Error(`No ${quoteToken.symbol} token account found in wallet: ${wallet.publicKey}`);
+    }
+    quoteTokenAssociatedAddress = tokenAccount.pubkey;
+  }
+  catch (error) {
+    logger.error('error reading tokens');
+    process.exit();
   }
 
-  const tokenAccount = tokenAccounts.find((acc) => acc.accountInfo.mint.toString() === quoteToken.mint.toString())!;
-
-  if (!tokenAccount) {
-    throw new Error(`No ${quoteToken.symbol} token account found in wallet: ${wallet.publicKey}`);
-  }
-
-  quoteTokenAssociatedAddress = tokenAccount.pubkey;
 
   // load tokens to snipe
   loadSnipeList();
@@ -203,8 +216,8 @@ export async function processOpenBookMarket(updatedAccountInfo: KeyedAccountInfo
 
     saveTokenAccount(accountData.baseMint, accountData);
   } catch (e) {
-    logger.debug(e);
-    logger.error({ mint: accountData?.baseMint }, `Failed to process market`);
+    logger.error({ mint: accountData?.baseMint }, `Failed to process market `);
+    logger.error(e);
   }
 }
 
@@ -401,12 +414,11 @@ function shouldBuy(key: string): boolean {
   return USE_SNIPE_LIST ? snipeList.includes(key) : true;
 }
 
-const runListener = async () => {
-  await init();
-  const runTimestamp = Math.floor(new Date().getTime() / 1000);
-  const raydiumSubscriptionId = solanaConnection.onProgramAccountChange(
+async function subscribeToRaydiumPools(connection: any, runTimestamp: any) {
+
+  const raydiumSubscriptionId = connection.onProgramAccountChange(
     RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
-    async (updatedAccountInfo) => {
+    async (updatedAccountInfo: any) => {
       const key = updatedAccountInfo.accountId.toString();
       const poolState = LIQUIDITY_STATE_LAYOUT_V4.decode(updatedAccountInfo.accountInfo.data);
       const poolOpenTime = parseInt(poolState.poolOpenTime.toString());
@@ -441,9 +453,13 @@ const runListener = async () => {
     ],
   );
 
-  const openBookSubscriptionId = solanaConnection.onProgramAccountChange(
+  return raydiumSubscriptionId;
+}
+
+async function subscribeToOpenbook(connection: any, runTimestamp: any) {
+  const openBookSubscriptionId = connection.onProgramAccountChange(
     OPENBOOK_PROGRAM_ID,
-    async (updatedAccountInfo) => {
+    async (updatedAccountInfo: any) => {
       const key = updatedAccountInfo.accountId.toString();
       const existing = existingOpenBookMarkets.has(key);
       if (!existing) {
@@ -462,11 +478,14 @@ const runListener = async () => {
       },
     ],
   );
+  return openBookSubscriptionId;
+}
 
-  if (AUTO_SELL) {
-    const walletSubscriptionId = solanaConnection.onProgramAccountChange(
+async function subscribeAutosell(connection: any) {
+  try {
+    const walletSubscriptionId = connection.onProgramAccountChange(
       TOKEN_PROGRAM_ID,
-      async (updatedAccountInfo) => {
+      async (updatedAccountInfo: any) => {
         const accountData = AccountLayout.decode(updatedAccountInfo.accountInfo!.data);
 
         if (updatedAccountInfo.accountId.equals(quoteTokenAssociatedAddress)) {
@@ -488,8 +507,45 @@ const runListener = async () => {
         },
       ],
     );
-
     logger.info(`Listening for wallet changes: ${walletSubscriptionId}`);
+  } catch (error) {
+    logger.error('cant subscribe to wallet change')
+  }
+}
+
+async function getWalletBalance(connection: any) {
+  try {
+    const balance = await connection.getBalance(wallet.publicKey);
+    logger.info(`Wallet balance: ${balance} lamports (${balance / 1e9} SOL)`);
+  } catch (error) {
+    logger.error('Error getting wallet balance: ' + error);
+  }
+};
+
+const runListener = async () => {
+  try {
+    solanaConnection = new Connection(RPC_ENDPOINT, {
+      wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
+    })
+  } catch (error) {
+    logger.error('cant connect')
+    process.exit();
+  }
+  await init();
+  await getWalletBalance(solanaConnection);
+
+  const runTimestamp = Math.floor(new Date().getTime() / 1000);
+
+  const raydiumSubscriptionId = await subscribeToRaydiumPools(solanaConnection, runTimestamp);
+  logger.info(`Listening for raydium pool changes: ${raydiumSubscriptionId}`);
+
+  const openBookSubscriptionId = await subscribeToOpenbook(solanaConnection, runTimestamp);
+  logger.info(`Listening for openbookSubscriptionId changes: ${openBookSubscriptionId}`);
+
+
+  if (AUTO_SELL) {
+    const walletSubscriptionId = await subscribeAutosell(solanaConnection);
+    logger.info(`Listening for openbookSubscriptionId changes: ${walletSubscriptionId}`);
   }
 
   logger.info(`Listening for raydium changes: ${raydiumSubscriptionId}`);

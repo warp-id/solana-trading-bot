@@ -414,6 +414,7 @@ function shouldBuy(key: string): boolean {
   return USE_SNIPE_LIST ? snipeList.includes(key) : true;
 }
 
+// subscribe to changes from a pool
 async function subscribeToRaydiumPools(connection: any, runTimestamp: any) {
 
   const raydiumSubscriptionId = connection.onProgramAccountChange(
@@ -507,7 +508,7 @@ async function subscribeAutosell(connection: any) {
         },
       ],
     );
-    logger.info(`Listening for wallet changes: ${walletSubscriptionId}`);
+    return walletSubscriptionId;
   } catch (error) {
     logger.error('cant subscribe to wallet change')
   }
@@ -523,6 +524,7 @@ async function getWalletBalance(connection: any) {
 };
 
 const runListener = async () => {
+  // connect to the network and listen to events
   try {
     solanaConnection = new Connection(RPC_ENDPOINT, {
       wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
@@ -540,16 +542,13 @@ const runListener = async () => {
   logger.info(`Listening for raydium pool changes: ${raydiumSubscriptionId}`);
 
   const openBookSubscriptionId = await subscribeToOpenbook(solanaConnection, runTimestamp);
-  logger.info(`Listening for openbookSubscriptionId changes: ${openBookSubscriptionId}`);
+  logger.info(`Listening for openbook changes: ${openBookSubscriptionId}`);
 
 
   if (AUTO_SELL) {
     const walletSubscriptionId = await subscribeAutosell(solanaConnection);
-    logger.info(`Listening for openbookSubscriptionId changes: ${walletSubscriptionId}`);
+    logger.info(`Listening for wallet changes: ${walletSubscriptionId}`);
   }
-
-  logger.info(`Listening for raydium changes: ${raydiumSubscriptionId}`);
-  logger.info(`Listening for open book changes: ${openBookSubscriptionId}`);
 
   if (USE_SNIPE_LIST) {
     setInterval(loadSnipeList, SNIPE_LIST_REFRESH_INTERVAL);

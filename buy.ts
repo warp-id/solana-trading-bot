@@ -84,6 +84,7 @@ const SNIPE_LIST_REFRESH_INTERVAL = Number(retrieveEnvVariable('SNIPE_LIST_REFRE
 const AUTO_SELL = retrieveEnvVariable('AUTO_SELL', logger) === 'true';
 const MAX_SELL_RETRIES = Number(retrieveEnvVariable('MAX_SELL_RETRIES', logger));
 const AUTO_SELL_DELAY = Number(retrieveEnvVariable('AUTO_SELL_DELAY', logger));
+const MIN_POOL_SIZE = new BN(retrieveEnvVariable('MIN_POOL_SIZE', logger));
 
 let snipeList: string[] = [];
 
@@ -170,7 +171,6 @@ export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStat
 
   poolSize = poolSize.div(new BN(10 ** quoteToken.decimals));
 
-  const MIN_POOL_SIZE = new BN(retrieveEnvVariable('MIN_POOL_SIZE', logger));
 
   logger.info(
     `Processing pool: ${id.toString()} with ${poolSize.toString()} ${quoteToken.symbol} in liquidity`,

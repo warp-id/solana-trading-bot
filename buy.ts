@@ -53,16 +53,16 @@ const solanaConnection = new Connection(RPC_ENDPOINT, {
   wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
 });
 
-export type MinimalTokenAccountData = {
+export interface MinimalTokenAccountData {
   mint: PublicKey;
   address: PublicKey;
   poolKeys?: LiquidityPoolKeys;
   market?: MinimalMarketLayoutV3;
 };
 
-let existingLiquidityPools: Set<string> = new Set<string>();
-let existingOpenBookMarkets: Set<string> = new Set<string>();
-let existingTokenAccounts: Map<string, MinimalTokenAccountData> = new Map<string, MinimalTokenAccountData>();
+const existingLiquidityPools: Set<string> = new Set<string>();
+const existingOpenBookMarkets: Set<string> = new Set<string>();
+const existingTokenAccounts: Map<string, MinimalTokenAccountData> = new Map<string, MinimalTokenAccountData>();
 
 let wallet: Keypair;
 let quoteToken: Token;

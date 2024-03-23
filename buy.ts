@@ -90,6 +90,7 @@ const AUTO_SELL_DELAY = Number(retrieveEnvVariable('AUTO_SELL_DELAY', logger));
 const ONE_TOKEN_AT_A_TIME = retrieveEnvVariable('ONE_TOKEN_AT_A_TIME', logger);
 const CHECK_IF_IS_BURNED = retrieveEnvVariable('CHECK_IF_IS_BURNED', logger) === 'true';
 const CHECK_IF_IS_LOCKED = retrieveEnvVariable('CHECK_IF_IS_LOCKED', logger) === 'true';
+const MIN_POOL_SIZE = new BN(retrieveEnvVariable('MIN_POOL_SIZE', logger));
 
 let snipeList: string[] = [];
 
@@ -176,7 +177,6 @@ export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStat
 
   poolSize = poolSize.div(new BN(10 ** quoteToken.decimals));
 
-  const MIN_POOL_SIZE = new BN(retrieveEnvVariable('MIN_POOL_SIZE', logger));
 
   logger.info(
     `Processing pool: ${id.toString()} with ${poolSize.toString()} ${quoteToken.symbol} in liquidity`,

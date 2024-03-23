@@ -27,29 +27,13 @@ import {
   Commitment,
 } from '@solana/web3.js';
 import { getTokenAccounts, RAYDIUM_LIQUIDITY_PROGRAM_ID_V4, OPENBOOK_PROGRAM_ID, createPoolKeys } from './liquidity';
-import { retrieveEnvVariable } from './utils';
+import { logger, retrieveEnvVariable } from './utils';
 import { getMinimalMarketV3, MinimalMarketLayoutV3 } from './market';
 import { MintLayout } from './types';
-import pino from 'pino';
 import bs58 from 'bs58';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const transport = pino.transport({
-  target: 'pino-pretty',
-});
-
-export const logger = pino(
-  {
-    level: 'info',
-    redact: ['poolKeys'],
-    serializers: {
-      error: pino.stdSerializers.err,
-    },
-    base: undefined,
-  },
-  transport,
-);
 
 const network = 'mainnet-beta';
 const RPC_ENDPOINT = retrieveEnvVariable('RPC_ENDPOINT', logger);

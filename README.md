@@ -27,7 +27,7 @@ To run the script you need to:
 - Run the script by typing: `npm run buy` in terminal
 
 You should see the following output:  
-![output](output.png)
+![output](readme/output.png)
 
 ## Snipe list
 By default, script buys each token which has a new liquidity pool created and open for trading. 
@@ -73,7 +73,7 @@ To collect more information on an issue, please change `LOG_LEVEL` to `debug`.
   it means that wallet you provided doesn't have USDC/WSOL token account.
   - FIX: Go to dex and swap some SOL to USDC/WSOL. For example when you swap sol to wsol you should see it in wallet as shown below:
 
-![wsol](wsol.png)
+![wsol](readme/wsol.png)
 
 ## Contact
 [![](https://img.shields.io/discord/1201826085655023616?color=5865F2&logo=Discord&style=flat-square)](https://discord.gg/xYUETCA2aP)

@@ -30,7 +30,6 @@ import { logger } from './utils';
 import { getMinimalMarketV3, MinimalMarketLayoutV3 } from './market';
 import { MintLayout } from './types';
 import bs58 from 'bs58';
-import BN from 'bn.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -60,7 +59,7 @@ export interface MinimalTokenAccountData {
   address: PublicKey;
   poolKeys?: LiquidityPoolKeys;
   market?: MinimalMarketLayoutV3;
-};
+}
 
 const existingLiquidityPools: Set<string> = new Set<string>();
 const existingOpenBookMarkets: Set<string> = new Set<string>();
@@ -70,6 +69,7 @@ let wallet: Keypair;
 let quoteToken: Token;
 let quoteTokenAssociatedAddress: PublicKey;
 let quoteAmount: TokenAmount;
+let quoteMinPoolSizeAmount: TokenAmount;
 
 let snipeList: string[] = [];
 
@@ -85,6 +85,7 @@ async function init(): Promise<void> {
     case 'WSOL': {
       quoteToken = Token.WSOL;
       quoteAmount = new TokenAmount(Token.WSOL, QUOTE_AMOUNT, false);
+      quoteMinPoolSizeAmount = new TokenAmount(quoteToken, MIN_POOL_SIZE, false);
       break;
     }
     case 'USDC': {
@@ -96,6 +97,7 @@ async function init(): Promise<void> {
         'USDC',
       );
       quoteAmount = new TokenAmount(quoteToken, QUOTE_AMOUNT, false);
+      quoteMinPoolSizeAmount = new TokenAmount(quoteToken, MIN_POOL_SIZE, false);
       break;
     }
     default: {
@@ -103,9 +105,14 @@ async function init(): Promise<void> {
     }
   }
 
+  logger.info(`Snipe list: ${USE_SNIPE_LIST}`);
+  logger.info(`Check mint renounced: ${CHECK_IF_MINT_IS_RENOUNCED}`);
   logger.info(
-    `Script will buy all new tokens using ${QUOTE_MINT}. Amount that will be used to buy each token is: ${quoteAmount.toFixed().toString()}`,
+    `Min pool size: ${quoteMinPoolSizeAmount.isZero() ? 'false' : quoteMinPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
   );
+  logger.info(`Buy amount: ${quoteAmount.toFixed()} ${quoteToken.symbol}`);
+  logger.info(`Auto sell: ${AUTO_SELL}`);
+  logger.info(`Sell delay: ${AUTO_SELL_DELAY === 0 ? 'false' : AUTO_SELL_DELAY}`);
 
   // check existing wallet for associated token account of quote mint
   const tokenAccounts = await getTokenAccounts(solanaConnection, wallet.publicKey, COMMITMENT_LEVEL);
@@ -149,25 +156,21 @@ export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStat
     return;
   }
 
-  let poolSize = new BN(poolState.swapQuoteInAmount);
+  if (!quoteMinPoolSizeAmount.isZero()) {
+    const poolSize = new TokenAmount(quoteToken, poolState.swapQuoteInAmount, true);
+    logger.info(`Processing pool: ${id.toString()} with ${poolSize.toFixed()} ${quoteToken.symbol} in liquidity`);
 
-  poolSize = poolSize.div(new BN(10 ** quoteToken.decimals));
-
-
-  logger.info(
-    `Processing pool: ${id.toString()} with ${poolSize.toString()} ${quoteToken.symbol} in liquidity`,
-  );
-
-  if (poolSize.lt(new BN(MIN_POOL_SIZE))) {
-    logger.warn(
-      {
-        mint: poolState.baseMint,
-        pooled: poolSize.toString() + ' ' + quoteToken.symbol,
-      },
-      `Skipping pool, smaller than ${MIN_POOL_SIZE} ${quoteToken.symbol}`,
-      `Swap quote in amount: ${poolSize.toString()}`
-    );
-    return;
+    if (poolSize.lt(quoteMinPoolSizeAmount)) {
+      logger.warn(
+        {
+          mint: poolState.baseMint,
+          pooled: `${poolSize.toFixed()} ${quoteToken.symbol}`,
+        },
+        `Skipping pool, smaller than ${quoteMinPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
+        `Swap quote in amount: ${poolSize.toFixed()}`,
+      );
+      return;
+    }
   }
 
   if (CHECK_IF_MINT_IS_RENOUNCED) {

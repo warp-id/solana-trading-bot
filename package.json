@@ -2,7 +2,8 @@
   "name": "solana-sniper-bot",
   "author": "Filip Dundjer",
   "scripts": {
-    "buy": "ts-node buy.ts"
+    "buy": "ts-node buy.ts",
+    "tsc": "tsc --noEmit"
   },
   "dependencies": {
     "@raydium-io/raydium-sdk": "^1.3.1-beta.47",

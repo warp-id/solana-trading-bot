@@ -27,7 +27,7 @@ To run the script you need to:
 - Run the script by typing: `npm run buy` in terminal
 
 You should see the following output:  
-![output](output.png)
+![output](readme/output.png)
 
 ## Snipe list
 By default, script buys each token which has a new liquidity pool created and open for trading. 
@@ -47,10 +47,10 @@ It will buy only when new pool is open for trading. If you want to buy token tha
 By default, auto sell is enabled. If you want to disable it, you need to:
 - Change variable `AUTO_SELL` to `false`
 - Update `MAX_SELL_RETRIES` to set the maximum number of retries for selling token
-- Update `SELL_DELAY` to the number of milliseconds you want to wait before selling the token
+- Update `AUTO_SELL_DELAY` to the number of milliseconds you want to wait before selling the token
   - This will sell the token after the specified delay. (+- RPC node speed)
 
-If you set SELL_DELAY to 0, token will be sold immediately after it is bought.
+If you set AUTO_SELL_DELAY to 0, token will be sold immediately after it is bought.
 
 There is no guarantee that the token will be sold at a profit or even sold at all. The developer is not responsible for any losses incurred by using this feature.
 
@@ -73,7 +73,7 @@ To collect more information on an issue, please change `LOG_LEVEL` to `debug`.
   it means that wallet you provided doesn't have USDC/WSOL token account.
   - FIX: Go to dex and swap some SOL to USDC/WSOL. For example when you swap sol to wsol you should see it in wallet as shown below:
 
-![wsol](wsol.png)
+![wsol](readme/wsol.png)
 
 ## Contact
 [![](https://img.shields.io/discord/1201826085655023616?color=5865F2&logo=Discord&style=flat-square)](https://discord.gg/xYUETCA2aP)

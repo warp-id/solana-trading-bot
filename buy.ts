@@ -47,6 +47,7 @@ import {
   RPC_WEBSOCKET_ENDPOINT,
   SNIPE_LIST_REFRESH_INTERVAL,
   USE_SNIPE_LIST,
+  MIN_POOL_SIZE,
 } from './constants';
 
 const solanaConnection = new Connection(RPC_ENDPOINT, {
@@ -58,7 +59,7 @@ export interface MinimalTokenAccountData {
   address: PublicKey;
   poolKeys?: LiquidityPoolKeys;
   market?: MinimalMarketLayoutV3;
-};
+}
 
 const existingLiquidityPools: Set<string> = new Set<string>();
 const existingOpenBookMarkets: Set<string> = new Set<string>();
@@ -68,6 +69,7 @@ let wallet: Keypair;
 let quoteToken: Token;
 let quoteTokenAssociatedAddress: PublicKey;
 let quoteAmount: TokenAmount;
+let quoteMinPoolSizeAmount: TokenAmount;
 
 let snipeList: string[] = [];
 
@@ -83,6 +85,7 @@ async function init(): Promise<void> {
     case 'WSOL': {
       quoteToken = Token.WSOL;
       quoteAmount = new TokenAmount(Token.WSOL, QUOTE_AMOUNT, false);
+      quoteMinPoolSizeAmount = new TokenAmount(quoteToken, MIN_POOL_SIZE, false);
       break;
     }
     case 'USDC': {
@@ -94,6 +97,7 @@ async function init(): Promise<void> {
         'USDC',
       );
       quoteAmount = new TokenAmount(quoteToken, QUOTE_AMOUNT, false);
+      quoteMinPoolSizeAmount = new TokenAmount(quoteToken, MIN_POOL_SIZE, false);
       break;
     }
     default: {
@@ -101,9 +105,14 @@ async function init(): Promise<void> {
     }
   }
 
+  logger.info(`Snipe list: ${USE_SNIPE_LIST}`);
+  logger.info(`Check mint renounced: ${CHECK_IF_MINT_IS_RENOUNCED}`);
   logger.info(
-    `Script will buy all new tokens using ${QUOTE_MINT}. Amount that will be used to buy each token is: ${quoteAmount.toFixed().toString()}`,
+    `Min pool size: ${quoteMinPoolSizeAmount.isZero() ? 'false' : quoteMinPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
   );
+  logger.info(`Buy amount: ${quoteAmount.toFixed()} ${quoteToken.symbol}`);
+  logger.info(`Auto sell: ${AUTO_SELL}`);
+  logger.info(`Sell delay: ${AUTO_SELL_DELAY === 0 ? 'false' : AUTO_SELL_DELAY}`);
 
   // check existing wallet for associated token account of quote mint
   const tokenAccounts = await getTokenAccounts(solanaConnection, wallet.publicKey, COMMITMENT_LEVEL);
@@ -145,6 +154,23 @@ function saveTokenAccount(mint: PublicKey, accountData: MinimalMarketLayoutV3) {
 export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStateV4) {
   if (!shouldBuy(poolState.baseMint.toString())) {
     return;
+  }
+
+  if (!quoteMinPoolSizeAmount.isZero()) {
+    const poolSize = new TokenAmount(quoteToken, poolState.swapQuoteInAmount, true);
+    logger.info(`Processing pool: ${id.toString()} with ${poolSize.toFixed()} ${quoteToken.symbol} in liquidity`);
+
+    if (poolSize.lt(quoteMinPoolSizeAmount)) {
+      logger.warn(
+        {
+          mint: poolState.baseMint,
+          pooled: `${poolSize.toFixed()} ${quoteToken.symbol}`,
+        },
+        `Skipping pool, smaller than ${quoteMinPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
+        `Swap quote in amount: ${poolSize.toFixed()}`,
+      );
+      return;
+    }
   }
 
   if (CHECK_IF_MINT_IS_RENOUNCED) {
@@ -355,6 +381,8 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
       );
       sold = true;
     } catch (e: any) {
+      // wait for a bit before retrying
+      await new Promise((resolve) => setTimeout(resolve, 100));
       retries++;
       logger.debug(e);
       logger.error({ mint }, `Failed to sell token, retry: ${retries}/${MAX_SELL_RETRIES}`);

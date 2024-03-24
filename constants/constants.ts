@@ -15,3 +15,5 @@ export const AUTO_SELL_DELAY = Number(retrieveEnvVariable('AUTO_SELL_DELAY', log
 export const PRIVATE_KEY = retrieveEnvVariable('PRIVATE_KEY', logger);
 export const QUOTE_MINT = retrieveEnvVariable('QUOTE_MINT', logger);
 export const QUOTE_AMOUNT = retrieveEnvVariable('QUOTE_AMOUNT', logger);
+export const MIN_POOL_SIZE = retrieveEnvVariable('MIN_POOL_SIZE', logger);
+

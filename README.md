@@ -27,8 +27,12 @@ To run the script you need to:
     - set to 0 to disable pool size check
 - Install dependencies by typing: `npm install`
 - Run the script by typing: `npm run buy` in terminal
+- If you prefer to run this in docker, you can either use:
+  1. Use docker engine `docker build -t solana-sniper-bot .  && docker run -p 3000:3000 solana-sniper-bot` 
+  2. Use docker compose `docker-compose up` (add -d for auto-restart mode)
+- If you need scalability (eg. on kubernetes with different .env files), you can run `docker-compose up --scale app=3`
 
-You should see the following output:  
+- You should see the following output:  
 ![output](readme/output.png)
 
 ## Snipe list

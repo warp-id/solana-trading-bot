@@ -5,7 +5,9 @@ services:
     build: .
     ports:
       - "3000:3000"
-    volumes:
-      - .:/usr/src/app
     working_dir: /usr/src/app
-    command: npm run buy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:3000/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3

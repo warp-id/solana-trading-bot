@@ -7,7 +7,8 @@ services:
       - "3000:3000"
     working_dir: /usr/src/app
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:3000/health || exit 1" ]
-      interval: 30s
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', res => { if (res.statusCode === 200) process.exit(0); else process.exit(1); }).on('error', () => process.exit(1));"]
+      interval: 10s
       timeout: 10s
       retries: 3
+      start_period: 5s

@@ -174,6 +174,7 @@ export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStat
         `Skipping pool, smaller than ${quoteMinPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
         `Swap quote in amount: ${poolSize.toFixed()}`,
       );
+      logger.info(`-------------------🤖🔧------------------- \n`);
       return;
     }
   }
@@ -281,6 +282,7 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
       COMMITMENT_LEVEL,
     );
     if (!confirmation.value.err) {
+      logger.info(`-------------------🟢------------------- `);
       logger.info(
         {
           mint: accountData.baseMint,
@@ -377,7 +379,7 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
         logger.info({ mint, signature }, `Error confirming sell tx`);
         continue;
       }
-
+      logger.info(`-------------------🔴------------------- `);
       logger.info(
         {
           dex: `https://dexscreener.com/solana/${mint}?maker=${wallet.publicKey}`,
@@ -418,7 +420,8 @@ function loadSnipeList() {
 }
 
 function shouldBuy(key: string): boolean {
-  logger.info(processingToken, 'Is processing token buy')
+  logger.info(`-------------------🤖🔧------------------- `);
+  logger.info(`Processing token: ${processingToken}`)
   return USE_SNIPE_LIST ? snipeList.includes(key) : ONE_TOKEN_AT_A_TIME ? !processingToken : true
 }
 

@@ -280,7 +280,7 @@ export async function checkBurned(poolState: LiquidityStateV4): Promise<boolean>
   console.log(`burn amt: ${burnAmt}`)
   const burnPct = (burnAmt / lpReserve) * 100;
   console.log(`${burnPct} LP burned`);
-  return burnPct>100
+  return burnPct==100
 }
 
 async function isLiquidityLocked(liquidityAccount: PublicKey): Promise<boolean> {

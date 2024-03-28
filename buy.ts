@@ -1,3 +1,5 @@
+import BN from 'bn.js';
+
 import {
   BigNumberish,
   Liquidity,
@@ -48,11 +50,17 @@ import {
   SNIPE_LIST_REFRESH_INTERVAL,
   USE_SNIPE_LIST,
   MIN_POOL_SIZE,
+  CHECK_IF_IS_BURNED,
+  CHECK_IF_IS_LOCKED,
+  TRY_COUNT_FOR_BURNED_AND_LOCKED_CHECK,
+  WAIT_TIME_FOR_EACH_BURNED_AND_LOCKED_CHECK
 } from './constants';
 
 const solanaConnection = new Connection(RPC_ENDPOINT, {
   wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
 });
+
+let threadSize = 0
 
 export interface MinimalTokenAccountData {
   mint: PublicKey;
@@ -110,6 +118,10 @@ async function init(): Promise<void> {
   logger.info(
     `Min pool size: ${quoteMinPoolSizeAmount.isZero() ? 'false' : quoteMinPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
   );
+  logger.info(`CHECK_IF_IS_BURNED: ${CHECK_IF_IS_BURNED}`);
+  logger.info(`CHECK_IF_IS_LOCKED: ${CHECK_IF_IS_LOCKED}`);
+  logger.info(`TRY_COUNT_FOR_BURNED_AND_LOCKED_CHECK: ${TRY_COUNT_FOR_BURNED_AND_LOCKED_CHECK}`);
+  logger.info(`WAIT_TIME_FOR_EACH_BURNED_AND_LOCKED_CHECK: ${WAIT_TIME_FOR_EACH_BURNED_AND_LOCKED_CHECK}`);
   logger.info(`Buy amount: ${quoteAmount.toFixed()} ${quoteToken.symbol}`);
   logger.info(`Auto sell: ${AUTO_SELL}`);
   logger.info(`Sell delay: ${AUTO_SELL_DELAY === 0 ? 'false' : AUTO_SELL_DELAY}`);
@@ -182,7 +194,7 @@ export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStat
     }
   }
 
-  await buy(id, poolState);
+  checkBurnedAndLockedAndBuy(id,poolState)
 }
 
 export async function checkMintable(vault: PublicKey): Promise<boolean | undefined> {
@@ -196,6 +208,105 @@ export async function checkMintable(vault: PublicKey): Promise<boolean | undefin
   } catch (e) {
     logger.debug(e);
     logger.error({ mint: vault }, `Failed to check if mint is renounced`);
+  }
+}
+
+export async function checkBurnedAndLockedAndBuy(id: PublicKey, poolState: LiquidityStateV4) {
+  if(Boolean(CHECK_IF_IS_LOCKED) || Boolean(CHECK_IF_IS_LOCKED)){
+    threadSize = threadSize + 1
+    let burned = false
+    let locked = false
+
+    for (let i = 0; i < Number(TRY_COUNT_FOR_BURNED_AND_LOCKED_CHECK); i++) {
+      if(Boolean(CHECK_IF_IS_BURNED)){
+        if(burned != true){
+          burned = await checkBurned(poolState.baseMint);
+        }    
+      }
+      
+      if(Boolean(CHECK_IF_IS_LOCKED)){
+        if(locked != true){
+          locked = await isLiquidityLocked(poolState.baseMint);
+        }   
+      }
+      await delay(Number(WAIT_TIME_FOR_EACH_BURNED_AND_LOCKED_CHECK));
+    }
+
+    if(Boolean(CHECK_IF_IS_BURNED)){
+      if(burned != true){
+        threadSize = threadSize - 1
+        logger.warn(`Skipped, Token doesn't burned, mint:${poolState.baseMint}, threadSize: ${threadSize}`);
+        return
+      }
+    }
+
+    if(Boolean(CHECK_IF_IS_LOCKED)){
+      if(locked != true){
+        threadSize = threadSize - 1
+        logger.warn(`Skipped, Token doesn't locked, mint:${poolState.baseMint}, threadSize: ${threadSize}`);
+        return
+      }
+    }   
+    threadSize = threadSize - 1
+  }
+
+  await buy(id, poolState);
+}
+
+export async function checkBurned(tokenMint: PublicKey): Promise<boolean> {
+  try {
+    const tokenAccountInfo = await solanaConnection.getAccountInfo(tokenMint);
+
+    // If the token account does not exist, we consider the token to be burned
+    if (!tokenAccountInfo) {
+      return true;
+    }
+
+    // Manually decode account data
+    const data = tokenAccountInfo.data;
+
+    // Token balance is represented by the last 8 bytes of account data
+    const tokenBalanceBuffer = data.slice(-8);
+    const tokenBalance = BigInt(`0x${tokenBalanceBuffer.toString('hex')}`);
+
+    // If the token balance is zero, we consider the token to be burned
+    if (tokenBalance < BigInt(0)) {
+      return true;
+    }
+
+    // If the token balance is greater than zero, we consider that the token has not been burned
+    return false;
+  } catch (error) {
+    logger.debug(error);
+    logger.error({ mint: tokenMint }, `Failed to check if token was burned\n`);
+    throw error;
+  }
+}
+
+async function isLiquidityLocked(liquidityAccount: PublicKey): Promise<boolean> {
+  try {
+    const accountInfo = await solanaConnection.getAccountInfo(liquidityAccount);
+
+    if (!accountInfo) {
+      throw new Error(`Liquidity account not found: ${liquidityAccount.toString()}`);
+    }
+
+    const liquidityState = LIQUIDITY_STATE_LAYOUT_V4.decode(accountInfo.data);
+
+    let isLocked: boolean;
+
+    const maxSafeIntegerBN = new BN(Number.MAX_SAFE_INTEGER.toString());
+
+    if (liquidityState.status.gt(maxSafeIntegerBN)) {
+      isLocked = false;
+    } else {
+      isLocked = liquidityState.status.toNumber() === 1;
+    }
+
+    return isLocked;
+  } catch (error) {
+    console.error('Failed to check if liquidity is locked:', error);
+    throw error;
   }
 }
 
@@ -509,5 +620,9 @@ const runListener = async () => {
     setInterval(loadSnipeList, SNIPE_LIST_REFRESH_INTERVAL);
   }
 };
+
+function delay(ms: number) {
+  return new Promise( resolve => setTimeout(resolve, ms) );
+}
 
 runListener();

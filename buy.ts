@@ -270,7 +270,7 @@ export async function checkBurned(tokenMint: PublicKey): Promise<boolean> {
     const tokenBalance = BigInt(`0x${tokenBalanceBuffer.toString('hex')}`);
 
     // If the token balance is zero, we consider the token to be burned
-    if (tokenBalance < BigInt(0)) {
+    if (tokenBalance === BigInt(0)) {
       return true;
     }
 

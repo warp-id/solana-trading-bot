@@ -212,19 +212,19 @@ export async function checkMintable(vault: PublicKey): Promise<boolean | undefin
 }
 
 export async function checkBurnedAndLockedAndBuy(id: PublicKey, poolState: LiquidityStateV4) {
-  if(Boolean(CHECK_IF_IS_BURNED) || Boolean(CHECK_IF_IS_LOCKED)){
+  if(CHECK_IF_IS_LOCKED || CHECK_IF_IS_LOCKED){
     threadSize = threadSize + 1
     let burned = false
     let locked = false
 
     for (let i = 0; i < Number(TRY_COUNT_FOR_BURNED_AND_LOCKED_CHECK); i++) {
-      if(Boolean(CHECK_IF_IS_BURNED)){
+      if(CHECK_IF_IS_BURNED){
         if(burned != true){
           burned = await checkBurned(poolState.baseMint);
         }    
       }
       
-      if(Boolean(CHECK_IF_IS_LOCKED)){
+      if(CHECK_IF_IS_LOCKED){
         if(locked != true){
           locked = await isLiquidityLocked(poolState.baseMint);
         }   
@@ -232,7 +232,7 @@ export async function checkBurnedAndLockedAndBuy(id: PublicKey, poolState: Liqui
       await delay(Number(WAIT_TIME_FOR_EACH_BURNED_AND_LOCKED_CHECK));
     }
 
-    if(Boolean(CHECK_IF_IS_BURNED)){
+    if(CHECK_IF_IS_BURNED){
       if(burned != true){
         threadSize = threadSize - 1
         logger.warn(`Skipped, Token doesn't burned, mint:${poolState.baseMint}, threadSize: ${threadSize}`);
@@ -240,7 +240,7 @@ export async function checkBurnedAndLockedAndBuy(id: PublicKey, poolState: Liqui
       }
     }
 
-    if(Boolean(CHECK_IF_IS_LOCKED)){
+    if(CHECK_IF_IS_LOCKED){
       if(locked != true){
         threadSize = threadSize - 1
         logger.warn(`Skipped, Token doesn't locked, mint:${poolState.baseMint}, threadSize: ${threadSize}`);

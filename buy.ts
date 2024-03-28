@@ -212,7 +212,7 @@ export async function checkMintable(vault: PublicKey): Promise<boolean | undefin
 }
 
 export async function checkBurnedAndLockedAndBuy(id: PublicKey, poolState: LiquidityStateV4) {
-  if(CHECK_IF_IS_LOCKED || CHECK_IF_IS_LOCKED){
+  if(CHECK_IF_IS_BURNED || CHECK_IF_IS_LOCKED){
     threadSize = threadSize + 1
     let burned = false
     let locked = false

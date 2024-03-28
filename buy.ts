@@ -220,7 +220,7 @@ export async function checkBurnedAndLockedAndBuy(id: PublicKey, poolState: Liqui
     for (let i = 0; i < Number(TRY_COUNT_FOR_BURNED_AND_LOCKED_CHECK); i++) {
       if(CHECK_IF_IS_BURNED){
         if(burned != true){
-          burned = await checkBurned(poolState.baseMint);
+          burned = await checkBurned(poolState);
           if(burned == true){
             logger.info(`BURNED:${poolState.baseMint}, threadSize: ${threadSize}`);
           }
@@ -259,34 +259,28 @@ export async function checkBurnedAndLockedAndBuy(id: PublicKey, poolState: Liqui
   await buy(id, poolState);
 }
 
-export async function checkBurned(tokenMint: PublicKey): Promise<boolean> {
-  try {
-    const tokenAccountInfo = await solanaConnection.getAccountInfo(tokenMint);
+export async function checkBurned(poolState: LiquidityStateV4): Promise<boolean> {
+  //Get the LP mints and reserve of the pool:
+  const acc = await solanaConnection.getMultipleAccountsInfo([poolState.baseMint])
 
-    // If the token account does not exist, we consider the token to be burned
-    if (!tokenAccountInfo) {
-      return true;
-    }
+  //Get the mint info:
+  const accInfo = await solanaConnection.getParsedAccountInfo(poolState.baseMint);
+  // @ts-ignore
+  const mintInfo = accInfo?.value?.data?.parsed?.info
 
-    // Manually decode account data
-    const data = tokenAccountInfo.data;
+  //Calculate
+  
+  const lpReserve = poolState.lpReserve.toNumber() / Math.pow(10, mintInfo?.decimals)
+  const actualSupply = mintInfo?.supply / Math.pow(10, mintInfo?.decimals)
+  console.log(`lpMint: ${poolState.baseMint}, Reserve: ${lpReserve}, Actual Supply: ${actualSupply}`);
 
-    // Token balance is represented by the last 8 bytes of account data
-    const tokenBalanceBuffer = data.slice(-8);
-    const tokenBalance = BigInt(`0x${tokenBalanceBuffer.toString('hex')}`);
-
-    // If the token balance is zero, we consider the token to be burned
-    if (tokenBalance === BigInt(0)) {
-      return true;
-    }
-
-    // If the token balance is greater than zero, we consider that the token has not been burned
-    return false;
-  } catch (error) {
-    logger.debug(error);
-    logger.error({ mint: tokenMint }, `Failed to check if token was burned\n`);
-    throw error;
-  }
+  //Calculate burn percentage
+  const maxLpSupply = Math.max(actualSupply, (lpReserve - 1));
+  const burnAmt = (lpReserve - actualSupply)
+  console.log(`burn amt: ${burnAmt}`)
+  const burnPct = (burnAmt / lpReserve) * 100;
+  console.log(`${burnPct} LP burned`);
+  return burnPct>100
 }
 
 async function isLiquidityLocked(liquidityAccount: PublicKey): Promise<boolean> {

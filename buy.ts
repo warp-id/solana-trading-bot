@@ -231,7 +231,7 @@ export async function checkBurnedAndLockedAndBuy(id: PublicKey, poolState: Liqui
         if(locked != true){
           locked = await isLiquidityLocked(poolState.baseMint);
           if(locked == true){
-            logger.info(`BURNED:${poolState.baseMint}, threadSize: ${threadSize}`);
+            logger.info(`LOCKED:${poolState.baseMint}, threadSize: ${threadSize}`);
           }
         }    
       }

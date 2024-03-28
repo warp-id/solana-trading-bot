@@ -221,13 +221,19 @@ export async function checkBurnedAndLockedAndBuy(id: PublicKey, poolState: Liqui
       if(CHECK_IF_IS_BURNED){
         if(burned != true){
           burned = await checkBurned(poolState.baseMint);
-        }    
+          if(burned == true){
+            logger.info(`BURNED:${poolState.baseMint}, threadSize: ${threadSize}`);
+          }
+        }   
       }
       
       if(CHECK_IF_IS_LOCKED){
         if(locked != true){
           locked = await isLiquidityLocked(poolState.baseMint);
-        }   
+          if(locked == true){
+            logger.info(`BURNED:${poolState.baseMint}, threadSize: ${threadSize}`);
+          }
+        }    
       }
       await delay(Number(WAIT_TIME_FOR_EACH_BURNED_AND_LOCKED_CHECK));
     }

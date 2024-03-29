@@ -292,25 +292,19 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
   }
 }
 
-async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish): Promise<void> {
-  let sold = false;
+async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish, value: number): Promise<boolean> {
   let retries = 0;
-
-  if (AUTO_SELL_DELAY > 0) {
-    await new Promise((resolve) => setTimeout(resolve, AUTO_SELL_DELAY));
-  }
 
   do {
     try {
       const tokenAccount = existingTokenAccounts.get(mint.toString());
-
       if (!tokenAccount) {
-        return;
+        return true;
       }
 
       if (!tokenAccount.poolKeys) {
         logger.warn({ mint }, 'No pool keys found');
-        return;
+        continue;
       }
 
       if (amount === 0) {
@@ -320,8 +314,14 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
           },
           `Empty balance, can't sell`,
         );
-        return;
+        return true;
       }
+
+      // check st/tp
+      if (tokenAccount.buyValue === undefined) return true;
+
+      const netChange = (value - tokenAccount.buyValue) / tokenAccount.buyValue;
+      if (netChange > STOP_LOSS && netChange < TAKE_PROFIT) return false;
 
       const { innerTransaction } = Liquidity.makeSwapFixedInInstruction(
         {
@@ -338,22 +338,23 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
       );
 
       const latestBlockhash = await solanaConnection.getLatestBlockhash({
-        commitment: COMMITMENT_LEVEL,
+        commitment: commitment,
       });
       const messageV0 = new TransactionMessage({
         payerKey: wallet.publicKey,
         recentBlockhash: latestBlockhash.blockhash,
         instructions: [
-          ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 421197 }),
-          ComputeBudgetProgram.setComputeUnitLimit({ units: 101337 }),
+          ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 400000 }),
+          ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
           ...innerTransaction.instructions,
           createCloseAccountInstruction(tokenAccount.address, wallet.publicKey, wallet.publicKey),
         ],
       }).compileToV0Message();
+      
       const transaction = new VersionedTransaction(messageV0);
       transaction.sign([wallet, ...innerTransaction.signers]);
       const signature = await solanaConnection.sendRawTransaction(transaction.serialize(), {
-        preflightCommitment: COMMITMENT_LEVEL,
+        preflightCommitment: commitment,
       });
       logger.info({ mint, signature }, `Sent sell tx`);
       const confirmation = await solanaConnection.confirmTransaction(
@@ -362,7 +363,7 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
           lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
           blockhash: latestBlockhash.blockhash,
         },
-        COMMITMENT_LEVEL,
+        commitment,
       );
       if (confirmation.value.err) {
         logger.debug(confirmation.value.err);
@@ -372,22 +373,21 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
 
       logger.info(
         {
-          dex: `https://dexscreener.com/solana/${mint}?maker=${wallet.publicKey}`,
           mint,
           signature,
-          url: `https://solscan.io/tx/${signature}?cluster=${NETWORK}`,
+          url: `https://solscan.io/tx/${signature}?cluster=${network}`,
+          dex: `https://dexscreener.com/solana/${mint}?maker=${wallet.publicKey}`,
         },
-        `Confirmed sell tx`,
+        `Confirmed sell tx... Sold at: ${value}\tNet Profit: ${netChange * 100}%`,
       );
-      sold = true;
+      return true;
     } catch (e: any) {
-      // wait for a bit before retrying
-      await new Promise((resolve) => setTimeout(resolve, 100));
       retries++;
       logger.debug(e);
       logger.error({ mint }, `Failed to sell token, retry: ${retries}/${MAX_SELL_RETRIES}`);
     }
-  } while (!sold && retries < MAX_SELL_RETRIES);
+  } while (retries < MAX_SELL_RETRIES);
+  return true;
 }
 
 function loadSnipeList() {

@@ -48,6 +48,7 @@ import {
   SNIPE_LIST_REFRESH_INTERVAL,
   USE_SNIPE_LIST,
   MIN_POOL_SIZE,
+  MAX_POOL_SIZE,
   ONE_TOKEN_AT_A_TIME,
 } from './constants';
 
@@ -71,6 +72,7 @@ let quoteToken: Token;
 let quoteTokenAssociatedAddress: PublicKey;
 let quoteAmount: TokenAmount;
 let quoteMinPoolSizeAmount: TokenAmount;
+let quoteMaxPoolSizeAmount: TokenAmount;
 let processingToken: Boolean = false;
 
 
@@ -90,6 +92,7 @@ async function init(): Promise<void> {
       quoteToken = Token.WSOL;
       quoteAmount = new TokenAmount(Token.WSOL, QUOTE_AMOUNT, false);
       quoteMinPoolSizeAmount = new TokenAmount(quoteToken, MIN_POOL_SIZE, false);
+      quoteMaxPoolSizeAmount = new TokenAmount(quoteToken, MAX_POOL_SIZE, false);
       break;
     }
     case 'USDC': {
@@ -102,6 +105,7 @@ async function init(): Promise<void> {
       );
       quoteAmount = new TokenAmount(quoteToken, QUOTE_AMOUNT, false);
       quoteMinPoolSizeAmount = new TokenAmount(quoteToken, MIN_POOL_SIZE, false);
+      quoteMaxPoolSizeAmount = new TokenAmount(quoteToken, MAX_POOL_SIZE, false);
       break;
     }
     default: {
@@ -113,6 +117,9 @@ async function init(): Promise<void> {
   logger.info(`Check mint renounced: ${CHECK_IF_MINT_IS_RENOUNCED}`);
   logger.info(
     `Min pool size: ${quoteMinPoolSizeAmount.isZero() ? 'false' : quoteMinPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
+  );
+  logger.info(
+    `Max pool size: ${quoteMaxPoolSizeAmount.isZero() ? 'false' : quoteMaxPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
   );
   logger.info(`One token at a time: ${ONE_TOKEN_AT_A_TIME}`);
   logger.info(`Buy amount: ${quoteAmount.toFixed()} ${quoteToken.symbol}`);
@@ -172,6 +179,23 @@ export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStat
           pooled: `${poolSize.toFixed()} ${quoteToken.symbol}`,
         },
         `Skipping pool, smaller than ${quoteMinPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
+        `Swap quote in amount: ${poolSize.toFixed()}`,
+      );
+      logger.info(`-------------------🤖🔧------------------- \n`);
+      return;
+    }
+  }
+
+  if (!quoteMaxPoolSizeAmount.isZero()) {
+    const poolSize = new TokenAmount(quoteToken, poolState.swapQuoteInAmount, true);
+
+    if (poolSize.gt(quoteMaxPoolSizeAmount)) {
+      logger.warn(
+        {
+          mint: poolState.baseMint,
+          pooled: `${poolSize.toFixed()} ${quoteToken.symbol}`,
+        },
+        `Skipping pool, bigger than ${quoteMaxPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
         `Swap quote in amount: ${poolSize.toFixed()}`,
       );
       logger.info(`-------------------🤖🔧------------------- \n`);

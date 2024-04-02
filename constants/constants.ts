@@ -16,4 +16,5 @@ export const PRIVATE_KEY = retrieveEnvVariable('PRIVATE_KEY', logger);
 export const QUOTE_MINT = retrieveEnvVariable('QUOTE_MINT', logger);
 export const QUOTE_AMOUNT = retrieveEnvVariable('QUOTE_AMOUNT', logger);
 export const MIN_POOL_SIZE = retrieveEnvVariable('MIN_POOL_SIZE', logger);
-
+export const MAX_POOL_SIZE = retrieveEnvVariable('MAX_POOL_SIZE', logger);
+export const ONE_TOKEN_AT_A_TIME = retrieveEnvVariable('ONE_TOKEN_AT_A_TIME', logger) === 'true';

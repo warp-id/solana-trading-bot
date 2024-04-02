@@ -134,3 +134,6 @@ pnpm-lock.yaml
 
 # JetBrains
 .idea
+
+# Visual Studio Code 
+*.code-workspace

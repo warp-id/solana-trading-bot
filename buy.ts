@@ -48,6 +48,8 @@ import {
   SNIPE_LIST_REFRESH_INTERVAL,
   USE_SNIPE_LIST,
   MIN_POOL_SIZE,
+  MAX_POOL_SIZE,
+  ONE_TOKEN_AT_A_TIME,
 } from './constants';
 
 const solanaConnection = new Connection(RPC_ENDPOINT, {
@@ -70,6 +72,10 @@ let quoteToken: Token;
 let quoteTokenAssociatedAddress: PublicKey;
 let quoteAmount: TokenAmount;
 let quoteMinPoolSizeAmount: TokenAmount;
+let quoteMaxPoolSizeAmount: TokenAmount;
+let processingToken: Boolean = false;
+
+
 
 let snipeList: string[] = [];
 
@@ -86,6 +92,7 @@ async function init(): Promise<void> {
       quoteToken = Token.WSOL;
       quoteAmount = new TokenAmount(Token.WSOL, QUOTE_AMOUNT, false);
       quoteMinPoolSizeAmount = new TokenAmount(quoteToken, MIN_POOL_SIZE, false);
+      quoteMaxPoolSizeAmount = new TokenAmount(quoteToken, MAX_POOL_SIZE, false);
       break;
     }
     case 'USDC': {
@@ -98,6 +105,7 @@ async function init(): Promise<void> {
       );
       quoteAmount = new TokenAmount(quoteToken, QUOTE_AMOUNT, false);
       quoteMinPoolSizeAmount = new TokenAmount(quoteToken, MIN_POOL_SIZE, false);
+      quoteMaxPoolSizeAmount = new TokenAmount(quoteToken, MAX_POOL_SIZE, false);
       break;
     }
     default: {
@@ -110,6 +118,10 @@ async function init(): Promise<void> {
   logger.info(
     `Min pool size: ${quoteMinPoolSizeAmount.isZero() ? 'false' : quoteMinPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
   );
+  logger.info(
+    `Max pool size: ${quoteMaxPoolSizeAmount.isZero() ? 'false' : quoteMaxPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
+  );
+  logger.info(`One token at a time: ${ONE_TOKEN_AT_A_TIME}`);
   logger.info(`Buy amount: ${quoteAmount.toFixed()} ${quoteToken.symbol}`);
   logger.info(`Auto sell: ${AUTO_SELL}`);
   logger.info(`Sell delay: ${AUTO_SELL_DELAY === 0 ? 'false' : AUTO_SELL_DELAY}`);
@@ -169,6 +181,24 @@ export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStat
         `Skipping pool, smaller than ${quoteMinPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
         `Swap quote in amount: ${poolSize.toFixed()}`,
       );
+      logger.info(`-------------------🤖🔧------------------- \n`);
+      return;
+    }
+  }
+
+  if (!quoteMaxPoolSizeAmount.isZero()) {
+    const poolSize = new TokenAmount(quoteToken, poolState.swapQuoteInAmount, true);
+
+    if (poolSize.gt(quoteMaxPoolSizeAmount)) {
+      logger.warn(
+        {
+          mint: poolState.baseMint,
+          pooled: `${poolSize.toFixed()} ${quoteToken.symbol}`,
+        },
+        `Skipping pool, bigger than ${quoteMaxPoolSizeAmount.toFixed()} ${quoteToken.symbol}`,
+        `Swap quote in amount: ${poolSize.toFixed()}`,
+      );
+      logger.info(`-------------------🤖🔧------------------- \n`);
       return;
     }
   }
@@ -265,6 +295,8 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
       preflightCommitment: COMMITMENT_LEVEL,
     });
     logger.info({ mint: accountData.baseMint, signature }, `Sent buy tx`);
+    processingToken = true;
+
     const confirmation = await solanaConnection.confirmTransaction(
       {
         signature,
@@ -274,6 +306,7 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
       COMMITMENT_LEVEL,
     );
     if (!confirmation.value.err) {
+      logger.info(`-------------------🟢------------------- `);
       logger.info(
         {
           mint: accountData.baseMint,
@@ -288,6 +321,7 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
     }
   } catch (e) {
     logger.debug(e);
+    processingToken = false;
     logger.error({ mint: accountData.baseMint }, `Failed to buy token`);
   }
 }
@@ -369,7 +403,7 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
         logger.info({ mint, signature }, `Error confirming sell tx`);
         continue;
       }
-
+      logger.info(`-------------------🔴------------------- `);
       logger.info(
         {
           dex: `https://dexscreener.com/solana/${mint}?maker=${wallet.publicKey}`,
@@ -380,6 +414,7 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
         `Confirmed sell tx`,
       );
       sold = true;
+      processingToken = false;
     } catch (e: any) {
       // wait for a bit before retrying
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -388,6 +423,7 @@ async function sell(accountId: PublicKey, mint: PublicKey, amount: BigNumberish)
       logger.error({ mint }, `Failed to sell token, retry: ${retries}/${MAX_SELL_RETRIES}`);
     }
   } while (!sold && retries < MAX_SELL_RETRIES);
+  processingToken = false;
 }
 
 function loadSnipeList() {
@@ -408,7 +444,9 @@ function loadSnipeList() {
 }
 
 function shouldBuy(key: string): boolean {
-  return USE_SNIPE_LIST ? snipeList.includes(key) : true;
+  logger.info(`-------------------🤖🔧------------------- `);
+  logger.info(`Processing token: ${processingToken}`)
+  return USE_SNIPE_LIST ? snipeList.includes(key) : ONE_TOKEN_AT_A_TIME ? !processingToken : true
 }
 
 const runListener = async () => {
@@ -504,6 +542,10 @@ const runListener = async () => {
 
   logger.info(`Listening for raydium changes: ${raydiumSubscriptionId}`);
   logger.info(`Listening for open book changes: ${openBookSubscriptionId}`);
+
+  logger.info('------------------- 🚀 ---------------------');
+  logger.info('Bot is running! Press CTRL + C to stop it.');
+  logger.info('------------------- 🚀 ---------------------');
 
   if (USE_SNIPE_LIST) {
     setInterval(loadSnipeList, SNIPE_LIST_REFRESH_INTERVAL);

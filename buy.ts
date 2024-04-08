@@ -24,6 +24,7 @@ import {
   KeyedAccountInfo,
   TransactionMessage,
   VersionedTransaction,
+  TransactionExpiredBlockheightExceededError,
 } from '@solana/web3.js';
 import { getTokenAccounts, RAYDIUM_LIQUIDITY_PROGRAM_ID_V4, OPENBOOK_PROGRAM_ID, createPoolKeys } from './liquidity';
 import { logger } from './utils';
@@ -271,53 +272,76 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
       tokenAccount.poolKeys.version,
     );
 
-    const latestBlockhash = await solanaConnection.getLatestBlockhash({
+    let latestBlockhash = await solanaConnection.getLatestBlockhash({
       commitment: COMMITMENT_LEVEL,
     });
-    const messageV0 = new TransactionMessage({
-      payerKey: wallet.publicKey,
-      recentBlockhash: latestBlockhash.blockhash,
-      instructions: [
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 421197 }),
-        ComputeBudgetProgram.setComputeUnitLimit({ units: 101337 }),
-        createAssociatedTokenAccountIdempotentInstruction(
-          wallet.publicKey,
-          tokenAccount.address,
-          wallet.publicKey,
-          accountData.baseMint,
-        ),
-        ...innerTransaction.instructions,
-      ],
-    }).compileToV0Message();
-    const transaction = new VersionedTransaction(messageV0);
-    transaction.sign([wallet, ...innerTransaction.signers]);
-    const signature = await solanaConnection.sendRawTransaction(transaction.serialize(), {
-      preflightCommitment: COMMITMENT_LEVEL,
-    });
-    logger.info({ mint: accountData.baseMint, signature }, `Sent buy tx`);
-    processingToken = true;
 
-    const confirmation = await solanaConnection.confirmTransaction(
-      {
-        signature,
-        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-        blockhash: latestBlockhash.blockhash,
-      },
-      COMMITMENT_LEVEL,
-    );
-    if (!confirmation.value.err) {
-      logger.info(`-------------------🟢------------------- `);
-      logger.info(
-        {
-          mint: accountData.baseMint,
-          signature,
-          url: `https://solscan.io/tx/${signature}?cluster=${NETWORK}`,
-        },
-        `Confirmed buy tx`,
-      );
-    } else {
-      logger.debug(confirmation.value.err);
-      logger.info({ mint: accountData.baseMint, signature }, `Error confirming buy tx`);
+    const maxSendTxnAttempts = 3;
+
+    let signature: string = '';
+    let isTransactionConfirmed = false;
+
+    for (let i = 0; i < maxSendTxnAttempts; i++) {
+      console.log(`send transaction attempt: ${i}`);
+
+      try {
+        const messageV0 = new TransactionMessage({
+          payerKey: wallet.publicKey,
+          recentBlockhash: latestBlockhash.blockhash,
+          instructions: [
+            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 421197 }),
+            ComputeBudgetProgram.setComputeUnitLimit({ units: 101337 }),
+            createAssociatedTokenAccountIdempotentInstruction(
+              wallet.publicKey,
+              tokenAccount.address,
+              wallet.publicKey,
+              accountData.baseMint,
+            ),
+            ...innerTransaction.instructions,
+          ],
+        }).compileToV0Message();
+        const transaction = new VersionedTransaction(messageV0);
+        transaction.sign([wallet, ...innerTransaction.signers]);
+        signature = await solanaConnection.sendRawTransaction(transaction.serialize(), {
+          preflightCommitment: COMMITMENT_LEVEL,
+        });
+        logger.info({ mint: accountData.baseMint, signature }, `Sent buy tx`);
+        processingToken = true;
+    
+        const confirmation = await solanaConnection.confirmTransaction(
+          {
+            signature,
+            lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+            blockhash: latestBlockhash.blockhash,
+          },
+          COMMITMENT_LEVEL,
+        );
+        if (!confirmation.value.err) {
+          logger.info(`-------------------🟢------------------- `);
+          logger.info(
+            {
+              mint: accountData.baseMint,
+              signature,
+              url: `https://solscan.io/tx/${signature}?cluster=${NETWORK}`,
+            },
+            `Confirmed buy tx`,
+          );
+          isTransactionConfirmed = true;
+          break;
+        } else {
+          logger.debug(confirmation.value.err);
+          logger.info({ mint: accountData.baseMint, signature }, `Error confirming buy tx`);
+          throw new Error(`failed to confirm transaction, ${confirmation.value.err}`)
+        }
+      } catch (error) {
+        if (i === maxSendTxnAttempts - 1) throw error;
+
+        // If blockheight error grab new block hash
+        if (error instanceof TransactionExpiredBlockheightExceededError) {
+          const newBlockhash = await solanaConnection.getLatestBlockhash();
+          latestBlockhash = newBlockhash
+        }         
+      }
     }
   } catch (e) {
     logger.debug(e);

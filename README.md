@@ -1,38 +1,48 @@
-
 # Solana Sniper Bot (Poc)
+
 This code is written as proof of concept to demonstrate how we can buy new tokens immediately after the liquidity pool is open for trading.
 
-Script listens to new Raydium USDC or SOL pools and buys tokens for a fixed amount in USDC/SOL.  
-Depending on the speed of the RPC node, the purchase usually happens before the token is available on Raydium UI for swapping.
+The script listens to new Raydium USDC or SOL pools and buys tokens for a fixed amount in USDC/SOL. Depending on the speed of the RPC node, the purchase usually happens before the token is available on Raydium UI for swapping.
 
 This is provided as is, for learning purposes.
 
 ## Setup
 To run the script you need to:
-- Create a new empty Solana wallet
+- Create a new empty Solana wallet.
 - Transfer some SOL to it.
-- Convert some SOL to USDC or WSOL.
-  - You need USDC or WSOL depending on the configuration set below.
-- Configure the script by updating `.env.copy` file (remove the .copy from the file name when done).
-  - PRIVATE_KEY (your wallet private key)
-  - RPC_ENDPOINT (https RPC endpoint)
-  - RPC_WEBSOCKET_ENDPOINT (websocket RPC endpoint)
-  - QUOTE_MINT (which pools to snipe, USDC or WSOL)
-  - QUOTE_AMOUNT (amount used to buy each new token)
-  - COMMITMENT_LEVEL
-  - USE_SNIPE_LIST (buy only tokens listed in snipe-list.txt)
-  - SNIPE_LIST_REFRESH_INTERVAL (how often snipe list should be refreshed in milliseconds)
-  - CHECK_IF_MINT_IS_RENOUNCED (script will buy only if mint is renounced)
-  - MIN_POOL_SIZE (EXPERIMENTAL) (script will buy only if pool size is greater than specified amount)
-    - set to 0 to disable pool size check
-- Install dependencies by typing: `npm install`
-- Run the script by typing: `npm run buy` in terminal
+- Convert some SOL to USDC or WSOL, depending on the configuration set below.
+- Configure the script by updating the `.env.copy` file (remove the `.copy` from the file name when done). Update the file with your specific settings:
+  - `PRIVATE_KEY`: Your wallet's private key.
+  - `RPC_ENDPOINT`: HTTPS RPC endpoint for interacting with the Solana network.
+  - `RPC_WEBSOCKET_ENDPOINT`: WebSocket RPC endpoint for real-time updates from the Solana network.
+  - `QUOTE_MINT`: Specify the quote currency for pools to snipe (USDC or WSOL).
+  - `QUOTE_AMOUNT`: Amount of quote currency used to buy each new token.
+  - `COMMITMENT_LEVEL`: The commitment level of transactions (e.g., "finalized" for the highest level of security).
+  - `USE_SNIPE_LIST`: Set to `true` to enable buying only tokens listed in `snipe-list.txt`.
+  - `SNIPE_LIST_REFRESH_INTERVAL`: Interval in milliseconds to refresh the snipe list.
+  - `CHECK_IF_MINT_IS_RENOUNCED`: Set to `true` to buy tokens only if their mint is renounced.
+  - `MIN_POOL_SIZE`: The script will buy only if the pool size is greater than the specified amount (set to 0 to disable this check).
+  - `MAX_POOL_SIZE`: Maximum pool size to target for buying tokens.
+  - `ONE_TOKEN_AT_A_TIME`: Set to `true` to process buying one token at a time.
+  - `RUG_CHECK`: Set to `true` to enable rug pull checks before buying.
+  - `RUG_CHECK_WAIT_TIMEOUT_SECONDS`: Time in seconds to wait for rug pull check results.
+  - `CHECK_PRICE_INTERVAL_SECONDS`: Interval in seconds for checking the token price when managing auto-sell conditions.
+  - `BIRDEYE_API_KEY`: API key for accessing price check services.
+  - `TAKE_PROFIT`: Percentage profit at which to take profit.
+  - `STOP_LOSS`: Percentage loss at which to stop the loss.
+  - `AUTO_SELL`: Set to `true` to enable automatic selling of tokens.
+  - `MAX_SELL_RETRIES`: Maximum number of retries for selling a token.
+  - `AUTO_SELL_DELAY`: Delay in milliseconds before auto-selling a token.
+  - `MAX_BUY_RETRIES`: Maximum number of buy retries for each token.
+  - `LOG_LEVEL`: Set logging level, e.g., "info", "debug", etc.
+- Install dependencies by typing `npm install`.
+- Run the script by typing `npm run buy` in the terminal.
 
 You should see the following output:  
 ![output](readme/output.png)
 
 ## Snipe list
-By default, script buys each token which has a new liquidity pool created and open for trading. 
+By default, script buys each token which has a new liquidity pool created and open for trading.
 There are scenarios when you want to buy one specific token as soon as possible during the launch event.
 To achieve this, you'll have to use snipe list.
 - Change variable `USE_SNIPE_LIST` to `true`
@@ -45,14 +55,16 @@ You can update the list while script is running. Script will check for new value
 Pool must not exist before the script starts.
 It will buy only when new pool is open for trading. If you want to buy token that will be launched in the future, make sure that script is running before the launch.
 
-## Auto Sell
-By default, auto sell is enabled. If you want to disable it, you need to:
-- Change variable `AUTO_SELL` to `false`
-- Update `MAX_SELL_RETRIES` to set the maximum number of retries for selling token
-- Update `AUTO_SELL_DELAY` to the number of milliseconds you want to wait before selling the token
-  - This will sell the token after the specified delay. (+- RPC node speed)
+### Auto Sell
+By default, auto sell is enabled. This feature sells the token immediately after it is bought if set to 0 delay. Configure it with:
+- `AUTO_SELL_DELAY`: Number of milliseconds to wait before selling the token.
+- `MAX_SELL_RETRIES`: Maximum number of attempts to sell the token.
+- `TAKE_PROFIT` and `STOP_LOSS`: Percentage levels for taking profit and stopping losses.
 
-If you set AUTO_SELL_DELAY to 0, token will be sold immediately after it is bought.
+### Advanced Trading Strategies
+- `RUG_CHECK`: Enables rug pull check before buying. Set to `true` to activate.
+- `RUG_CHECK_WAIT_TIMEOUT_SECONDS`: Time to wait for rug pull results.
+- `CHECK_PRICE_INTERVAL_SECONDS`: Interval for checking the token price for auto sell conditions.
 
 There is no guarantee that the token will be sold at a profit or even sold at all. The developer is not responsible for any losses incurred by using this feature.
 

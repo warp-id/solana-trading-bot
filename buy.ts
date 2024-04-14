@@ -244,6 +244,7 @@ export async function processRaydiumPool(id: PublicKey, poolState: LiquidityStat
   }
 
   if (RUG_CHECK) {
+    await new Promise((resolve) => setTimeout(resolve, RUG_CHECK_WAIT_TIMEOUT_SECONDS * 1000));
     const rugScore = await getRugScore(poolState.baseMint.toString());
     if (!rugScore || rugScore > 600) {
       logger.warn(`Skipping, rug detected for mint ${poolState.baseMint}`);
@@ -270,7 +271,6 @@ export async function checkMintable(vault: PublicKey): Promise<boolean | undefin
 
 export async function getRugScore(tokenAddress: string) {
   try {
-    await new Promise((resolve) => setTimeout(resolve, RUG_CHECK_WAIT_TIMEOUT_SECONDS * 1000));
     const responseRaw = await fetch(`https://api.rugcheck.xyz/v1/tokens/${tokenAddress}/report`);
     let response
     try {
@@ -331,13 +331,11 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
         tokenAccount.poolKeys.version,
     );
 
-    const maxSendTxnAttempts = MAX_BUY_RETRIES;
-
     let signature: string = '';
     let isTransactionConfirmed = false;
 
     for (let i = 0; i < MAX_BUY_RETRIES; i++) {
-      logger.info(`send transaction attempt: ${i}`);
+      logger.info(`send transaction attempt: ${i+1}/${MAX_BUY_RETRIES}`);
 
       let latestBlockhash = await solanaConnection.getLatestBlockhash({
         commitment: COMMITMENT_LEVEL,
@@ -403,7 +401,7 @@ async function buy(accountId: PublicKey, accountData: LiquidityStateV4): Promise
         }
       } catch (error) {
         logger.warn(`got error on buy tx: ${error}`)
-        if (i === maxSendTxnAttempts - 1) throw error;
+        if (i === MAX_BUY_RETRIES - 1) throw error;
       }
     }
   } catch (e) {
@@ -665,12 +663,16 @@ const runListener = async () => {
 async function checkPriceAndSell(walletPublicKey:PublicKey, mintAddress:PublicKey, amount: BigNumberish) {
   try {
     const tokenPriceData = await getTokenPrice(mintAddress.toString())
+    if (!tokenPriceData?.data) {
+      logger.debug(tokenPriceData.data)
+      logger.warn(`Price for ${mintAddress.toString()} is not defined yet. Or birdeye returns some shit`)
+    }
     const currentTokenPrice = tokenPriceData.data.value
     const currentTokenLiq = tokenPriceData.data.liquidity
 
     if (currentTokenLiq < 1000) {
-      logger.warn(`${mintAddress.toString()} - low liquidity: ${currentTokenLiq}. Stop watching.`)
-      return
+      logger.warn(`${mintAddress.toString()} - low liquidity: ${currentTokenLiq}. Consider to sell...`)
+      // return // you have to wait to receive correct value of liquidity
     }
 
     const boughtInfo = boughtAmounts[mintAddress.toString() as keyof typeof boughtAmounts]

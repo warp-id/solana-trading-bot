@@ -1,26 +1,6 @@
-import { Commitment, Connection, PublicKey } from '@solana/web3.js';
-import {
-  Liquidity,
-  LiquidityPoolKeys,
-  Market,
-  TokenAccount,
-  SPL_ACCOUNT_LAYOUT,
-  publicKey,
-  struct,
-  MAINNET_PROGRAM_ID,
-  LiquidityStateV4,
-} from '@raydium-io/raydium-sdk';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { MinimalMarketLayoutV3 } from '../market';
-
-export const RAYDIUM_LIQUIDITY_PROGRAM_ID_V4 = MAINNET_PROGRAM_ID.AmmV4;
-export const OPENBOOK_PROGRAM_ID = MAINNET_PROGRAM_ID.OPENBOOK_MARKET;
-
-export const MINIMAL_MARKET_STATE_LAYOUT_V3 = struct([
-  publicKey('eventQueue'),
-  publicKey('bids'),
-  publicKey('asks'),
-]);
+import { PublicKey } from '@solana/web3.js';
+import { Liquidity, LiquidityPoolKeys, LiquidityStateV4, MAINNET_PROGRAM_ID, Market } from '@raydium-io/raydium-sdk';
+import { MinimalMarketLayoutV3 } from './market';
 
 export function createPoolKeys(
   id: PublicKey,
@@ -36,9 +16,9 @@ export function createPoolKeys(
     quoteDecimals: accountData.quoteDecimal.toNumber(),
     lpDecimals: 5,
     version: 4,
-    programId: RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
+    programId: MAINNET_PROGRAM_ID.AmmV4,
     authority: Liquidity.getAssociatedAuthority({
-      programId: RAYDIUM_LIQUIDITY_PROGRAM_ID_V4,
+      programId: MAINNET_PROGRAM_ID.AmmV4,
     }).publicKey,
     openOrders: accountData.openOrders,
     targetOrders: accountData.targetOrders,
@@ -60,29 +40,4 @@ export function createPoolKeys(
     lpVault: accountData.lpVault,
     lookupTableAccount: PublicKey.default,
   };
-}
-
-export async function getTokenAccounts(
-  connection: Connection,
-  owner: PublicKey,
-  commitment?: Commitment,
-) {
-  const tokenResp = await connection.getTokenAccountsByOwner(
-    owner,
-    {
-      programId: TOKEN_PROGRAM_ID,
-    },
-    commitment,
-  );
-
-  const accounts: TokenAccount[] = [];
-  for (const { pubkey, account } of tokenResp.value) {
-    accounts.push({
-      pubkey,
-      programId: account.owner,
-      accountInfo: SPL_ACCOUNT_LAYOUT.decode(account.data),
-    });
-  }
-
-  return accounts;
 }

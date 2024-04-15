@@ -79,13 +79,15 @@ You should see the following output:
 In case you experience a lot of failed transactions or transaction performance is too slow, you can try using `warp` for executing transactions.
 Warp is hosted service that executes transactions using integrations with third party providers.
 
-Using warp supports the developers of the open source project.
+Using warp for transactions supports the team behind this project.
 
 ### Security
-When using warp, transaction is sent to hosted service.
+When using warp, transaction is sent to the hosted service.
 **Payload that is being sent will contain your wallet private key**. This is needed to sign transactions.
 Each request is processed by hosted service and sent to third party provider.
 **We don't store your transactions, nor we store your private key.**
+
+Note: Warp transactions are disabled by default.
 
 ### Fees
 When using warp for transactions, fee is distributed between devlopers of warp and third party providers.

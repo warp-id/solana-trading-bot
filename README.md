@@ -14,54 +14,67 @@ To run the script you need to:
 - Convert some SOL to USDC or WSOL.
   - You need USDC or WSOL depending on the configuration set below.
 - Configure the script by updating `.env.copy` file (remove the .copy from the file name when done).
-  - PRIVATE_KEY (your wallet private key)
-  - RPC_ENDPOINT (https RPC endpoint)
-  - RPC_WEBSOCKET_ENDPOINT (websocket RPC endpoint)
-  - QUOTE_MINT (which pools to snipe, USDC or WSOL)
-  - QUOTE_AMOUNT (amount used to buy each new token)
-  - COMMITMENT_LEVEL
-  - USE_SNIPE_LIST (buy only tokens listed in snipe-list.txt)
-  - SNIPE_LIST_REFRESH_INTERVAL (how often snipe list should be refreshed in milliseconds)
-  - CHECK_IF_MINT_IS_RENOUNCED (script will buy only if mint is renounced)
-  - MIN_POOL_SIZE (EXPERIMENTAL) (script will buy only if pool size is greater than specified amount)
-    - set to 0 to disable pool size check
+  - Check [Configuration](#configuration) section bellow
 - Install dependencies by typing: `npm install`
-- Run the script by typing: `npm run buy` in terminal
+- Run the script by typing: `npm run start` in terminal
 
 You should see the following output:  
 ![output](readme/output.png)
 
-## Snipe list
-By default, script buys each token which has a new liquidity pool created and open for trading. 
-There are scenarios when you want to buy one specific token as soon as possible during the launch event.
-To achieve this, you'll have to use snipe list.
-- Change variable `USE_SNIPE_LIST` to `true`
-- Add token mint addresses you wish to buy in `snipe-list.txt` file
-  - Add each address as a new line
+### Configuration
 
-This will prevent script from buying everything, and instead it will buy just listed tokens.
-You can update the list while script is running. Script will check for new values in specified interval (`SNIPE_LIST_REFRESH_INTERVAL`).
+#### Wallet
+- `PRIVATE_KEY` - Your wallet's private key.
 
-Pool must not exist before the script starts.
-It will buy only when new pool is open for trading. If you want to buy token that will be launched in the future, make sure that script is running before the launch.
+#### Connection
+- `RPC_ENDPOINT` - HTTPS RPC endpoint for interacting with the Solana network.
+- `RPC_WEBSOCKET_ENDPOINT` - WebSocket RPC endpoint for real-time updates from the Solana network.
+- `COMMITMENT_LEVEL`- The commitment level of transactions (e.g., "finalized" for the highest level of security).
 
-## Auto Sell
-By default, auto sell is enabled. If you want to disable it, you need to:
-- Change variable `AUTO_SELL` to `false`
-- Update `MAX_SELL_RETRIES` to set the maximum number of retries for selling token
-- Update `AUTO_SELL_DELAY` to the number of milliseconds you want to wait before selling the token
-  - This will sell the token after the specified delay. (+- RPC node speed)
+#### Bot
+- `LOG_LEVEL` - Set logging level, e.g., `info`, `debug`, `trace`, etc.
+- `ONE_TOKEN_AT_A_TIME` - Set to `true` to process buying one token at a time.
+- `COMPUTE_UNIT_LIMIT` - Compute limit used to calculate fees.
+- `COMPUTE_UNIT_PRICE` - Compute price used to calculate fees.
+- `PRE_LOAD_EXISTING_MARKETS` - Bot will load all existing markets in memory on start.
+  - This option should not be used with public RPC.
+- `CACHE_NEW_MARKETS` - Set to `true` to cache new markets.
+  - This option should not be used with public RPC.
 
-If you set AUTO_SELL_DELAY to 0, token will be sold immediately after it is bought.
+#### Buy
+- `QUOTE_MINT` - Amount used to buy each new token.
+- `QUOTE_AMOUNT` - Which pools to snipe, USDC or WSOL.
+- `AUTO_BUY_DELAY` - Delay in milliseconds before buying a token.
+- `MAX_BUY_RETRIES` - Maximum number of retries for buying a token.
+- `BUY_SLIPPAGE` - Slippage %
 
-There is no guarantee that the token will be sold at a profit or even sold at all. The developer is not responsible for any losses incurred by using this feature.
+#### Sell
+- `AUTO_SELL` - Set to `true` to enable automatic selling of tokens.
+- `MAX_SELL_RETRIES` - Maximum number of retries for selling a token.
+- `AUTO_SELL_DELAY` -  Delay in milliseconds before auto-selling a token.
+- `PRICE_CHECK_INTERVAL` - Interval in milliseconds for checking the take profit and stop loss conditions.
+- `PRICE_CHECK_DURATION` - Time in milliseconds to wait for stop loss/take profit conditions.
+  - If you don't reach profit or loss bot will auto sell after this time.
+- `TAKE_PROFIT` - Percentage profit at which to take profit.
+  - Take profit is calculated based on quote mint.
+- `STOP_LOSS` - Percentage loss at which to stop the loss.
+  - Stop loss is calculated based on quote mint.
+- `SELL_SLIPPAGE` - Slippage %.
+
+#### Filters
+- `USE_SNIPE_LIST` - Set to `true` to enable buying only tokens listed in `snipe-list.txt`.
+  - Pool must not exist before the script starts.
+- `SNIPE_LIST_REFRESH_INTERVAL` - Interval in milliseconds to refresh the snipe list.
+- `CHECK_IF_MINT_IS_RENOUNCED` - Set to `true` to buy tokens only if their mint is renounced.
+- `CHECK_IF_BURNED` - Set to `true` to buy tokens only if their liqudity pool is burned.
+- `MIN_POOL_SIZE` - Bot will buy only if the pool size is greater than the specified amount.
+  - Set `0` to disable.
+- `MAX_POOL_SIZE` - Bot will buy only if the pool size is less than the specified amount.
+  - Set `0` to disable.
 
 ## Common issues
 If you have an error which is not listed here, please create a new issue in this repository.
 To collect more information on an issue, please change `LOG_LEVEL` to `debug`.
-
-### Empty transaction
-- If you see empty transactions on SolScan most likely fix is to change commitment level to `finalized`.
 
 ### Unsupported RPC node
 - If you see following error in your log file:  
@@ -79,6 +92,11 @@ To collect more information on an issue, please change `LOG_LEVEL` to `debug`.
 
 ## Contact
 [![](https://img.shields.io/discord/1201826085655023616?color=5865F2&logo=Discord&style=flat-square)](https://discord.gg/xYUETCA2aP)
+
+- If you want to leave a tip, you can send it to the following address:
+`7gm6BPQrSBaTAYaJheuRevBNXcmKsgbkfBCVSjBnt9aP`
+
+- If you need custom features or assistance, feel free to contact the admin team on discord for dedicated support.
 
 ## Disclaimer
 

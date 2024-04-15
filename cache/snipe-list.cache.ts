@@ -4,9 +4,10 @@ import { logger, SNIPE_LIST_REFRESH_INTERVAL } from '../helpers';
 
 export class SnipeListCache {
   private snipeList: string[] = [];
+  private fileLocation = path.join(__dirname, '../snipe-list.txt');
 
   constructor() {
-    setInterval(this.loadSnipeList, SNIPE_LIST_REFRESH_INTERVAL);
+    setInterval(() => this.loadSnipeList(), SNIPE_LIST_REFRESH_INTERVAL);
   }
 
   public init() {
@@ -18,10 +19,10 @@ export class SnipeListCache {
   }
 
   private loadSnipeList() {
-    logger.trace('Refreshing snipe list...');
+    logger.trace(`Refreshing snipe list...`);
 
     const count = this.snipeList.length;
-    const data = fs.readFileSync(path.join(__dirname, 'snipe-list.txt'), 'utf-8');
+    const data = fs.readFileSync(this.fileLocation, 'utf-8');
     this.snipeList = data
       .split('\n')
       .map((a) => a.trim())

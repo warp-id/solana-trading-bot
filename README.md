@@ -40,7 +40,10 @@ You should see the following output:
   - This option should not be used with public RPC.
 - `CACHE_NEW_MARKETS` - Set to `true` to cache new markets.
   - This option should not be used with public RPC.
-
+- `TRANSACTION_EXECUTOR` - Set to `warp` to use warp infrastructure for executing transactions
+  - For more details checkout [warp](#warp-transactions) section
+- `WARP_FEE` - If using warp executor this value will be used for transaction fees instead of `COMPUTE_UNIT_LIMIT` and `COMPUTE_UNIT_LIMIT`
+  - Minimum value is 0.0001 SOL, but we recommend using 0.006 SOL or above 
 #### Buy
 - `QUOTE_MINT` - Amount used to buy each new token.
 - `QUOTE_AMOUNT` - Which pools to snipe, USDC or WSOL.
@@ -71,6 +74,22 @@ You should see the following output:
   - Set `0` to disable.
 - `MAX_POOL_SIZE` - Bot will buy only if the pool size is less than the specified amount.
   - Set `0` to disable.
+
+## Warp transactions
+In case you experience a lot of failed transactions or transaction performance is too slow, you can try using `warp` for executing transactions.
+Warp is hosted service that executes transactions using integrations with third party providers.
+
+Using warp supports the developers of the open source project.
+
+### Security
+When using warp, transaction is sent to hosted service.
+**Payload that is being sent will contain your wallet private key**. This is needed to sign transactions.
+Each request is processed by hosted service and sent to third party provider.
+**We don't store your transactions, nor we store your private key.**
+
+### Fees
+When using warp for transactions, fee is distributed between devlopers of warp and third party providers.
+In case TX fails, no fee will be taken from your account.
 
 ## Common issues
 If you have an error which is not listed here, please create a new issue in this repository.

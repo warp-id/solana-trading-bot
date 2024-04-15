@@ -1,6 +1,7 @@
 {
-  "name": "solana-sniper-bot",
+  "name": "warp-solana-bot",
   "author": "Filip Dundjer",
+  "homepage": "https://warp.id",
   "version": "2.0.0",
   "scripts": {
     "start": "ts-node index.ts",

@@ -1,4 +1,10 @@
-import { BlockhashWithExpiryBlockHeight, Connection, Transaction, VersionedTransaction } from '@solana/web3.js';
+import {
+  BlockhashWithExpiryBlockHeight,
+  Connection,
+  Keypair,
+  Transaction,
+  VersionedTransaction,
+} from '@solana/web3.js';
 import { TransactionExecutor } from './transaction-executor.interface';
 import { logger } from '../helpers';
 
@@ -6,9 +12,10 @@ export class DefaultTransactionExecutor implements TransactionExecutor {
   constructor(private readonly connection: Connection) {}
 
   public async executeAndConfirm(
-    transaction: Transaction | VersionedTransaction,
+    transaction: VersionedTransaction,
+    payer: Keypair,
     latestBlockhash: BlockhashWithExpiryBlockHeight,
-  ): Promise<{ confirmed: boolean; signature: string }> {
+  ): Promise<{ confirmed: boolean; signature?: string }> {
     logger.debug('Executing transaction...');
     const signature = await this.execute(transaction);
 

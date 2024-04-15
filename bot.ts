@@ -14,20 +14,14 @@ import {
   RawAccount,
   TOKEN_PROGRAM_ID,
 } from '@solana/spl-token';
-import {
-  Liquidity,
-  LiquidityPoolKeysV4,
-  LiquidityStateV4,
-  Percent,
-  Token,
-  TokenAmount,
-} from '@raydium-io/raydium-sdk';
+import { Liquidity, LiquidityPoolKeysV4, LiquidityStateV4, Percent, Token, TokenAmount } from '@raydium-io/raydium-sdk';
 import { MarketCache, PoolCache, SnipeListCache } from './cache';
 import { PoolFilters } from './filters';
 import { TransactionExecutor } from './transactions';
 import { createPoolKeys, logger, NETWORK, sleep } from './helpers';
 import { Mutex } from 'async-mutex';
 import BN from 'bn.js';
+import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
 
 export interface BotConfig {
   wallet: Keypair;
@@ -64,14 +58,17 @@ export class Bot {
   // one token at the time
   private readonly mutex: Mutex;
   private sellExecutionCount = 0;
+  public readonly isWarp: boolean = false;
 
   constructor(
     private readonly connection: Connection,
     private readonly marketStorage: MarketCache,
     private readonly poolStorage: PoolCache,
     private readonly txExecutor: TransactionExecutor,
-    private readonly config: BotConfig,
+    readonly config: BotConfig,
   ) {
+    this.isWarp = txExecutor instanceof WarpTransactionExecutor;
+
     this.mutex = new Mutex();
     this.poolFilters = new PoolFilters(connection, {
       quoteToken: this.config.quoteToken,
@@ -318,8 +315,12 @@ export class Bot {
       payerKey: wallet.publicKey,
       recentBlockhash: latestBlockhash.blockhash,
       instructions: [
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: this.config.unitPrice }),
-        ComputeBudgetProgram.setComputeUnitLimit({ units: this.config.unitLimit }),
+        ...(this.isWarp
+          ? []
+          : [
+              ComputeBudgetProgram.setComputeUnitPrice({ microLamports: this.config.unitPrice }),
+              ComputeBudgetProgram.setComputeUnitLimit({ units: this.config.unitLimit }),
+            ]),
         ...(direction === 'buy'
           ? [
               createAssociatedTokenAccountIdempotentInstruction(
@@ -338,7 +339,7 @@ export class Bot {
     const transaction = new VersionedTransaction(messageV0);
     transaction.sign([wallet, ...innerTransaction.signers]);
 
-    return this.txExecutor.executeAndConfirm(transaction, latestBlockhash);
+    return this.txExecutor.executeAndConfirm(transaction, wallet, latestBlockhash);
   }
 
   private async priceMatch(amountIn: TokenAmount, poolKeys: LiquidityPoolKeysV4) {
@@ -374,11 +375,11 @@ export class Bot {
           `Take profit: ${takeProfit.toFixed()} | Stop loss: ${stopLoss.toFixed()} | Current: ${amountOut.toFixed()}`,
         );
 
-        if (amountOut.lt(stopLoss)){
+        if (amountOut.lt(stopLoss)) {
           break;
         }
 
-        if (amountOut.gt(takeProfit)){
+        if (amountOut.gt(takeProfit)) {
           break;
         }
 

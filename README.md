@@ -83,7 +83,7 @@ Using warp for transactions supports the team behind this project.
 
 ### Security
 When using warp, transaction is sent to the hosted service.
-**Payload that is being sent will contain your wallet private key**. This is needed to sign transactions.
+**Payload that is being sent will NOT contain your wallet private key**. Fee transaction is signed on your machine.
 Each request is processed by hosted service and sent to third party provider.
 **We don't store your transactions, nor we store your private key.**
 

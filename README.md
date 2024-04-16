@@ -41,7 +41,7 @@ You should see the following output:
 - `CACHE_NEW_MARKETS` - Set to `true` to cache new markets.
   - This option should not be used with public RPC.
 - `TRANSACTION_EXECUTOR` - Set to `warp` to use warp infrastructure for executing transactions
-  - For more details checkout [warp](#warp-transactions) section
+  - For more details checkout [warp](#warp-transactions-beta) section
 - `WARP_FEE` - If using warp executor this value will be used for transaction fees instead of `COMPUTE_UNIT_LIMIT` and `COMPUTE_UNIT_LIMIT`
   - Minimum value is 0.0001 SOL, but we recommend using 0.006 SOL or above 
 #### Buy

@@ -1,10 +1,9 @@
 import { Commitment, Connection, PublicKey } from '@solana/web3.js';
-import { GetStructureSchema, MARKET_STATE_LAYOUT_V3 } from '@raydium-io/raydium-sdk';
-import { MINIMAL_MARKET_STATE_LAYOUT_V3 } from '../liquidity';
+import { GetStructureSchema, MARKET_STATE_LAYOUT_V3, publicKey, struct } from '@raydium-io/raydium-sdk';
 
+export const MINIMAL_MARKET_STATE_LAYOUT_V3 = struct([publicKey('eventQueue'), publicKey('bids'), publicKey('asks')]);
 export type MinimalMarketStateLayoutV3 = typeof MINIMAL_MARKET_STATE_LAYOUT_V3;
-export type MinimalMarketLayoutV3 =
-  GetStructureSchema<MinimalMarketStateLayoutV3>;
+export type MinimalMarketLayoutV3 = GetStructureSchema<MinimalMarketStateLayoutV3>;
 
 export async function getMinimalMarketV3(
   connection: Connection,

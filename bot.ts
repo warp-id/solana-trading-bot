@@ -343,6 +343,11 @@ export class Bot {
   }
 
   private async priceMatch(amountIn: TokenAmount, poolKeys: LiquidityPoolKeysV4) {
+    if (this.config.priceCheckDuration === 0 || this.config.priceCheckInterval === 0) {
+      return;
+    }
+
+    const timesToCheck = this.config.priceCheckDuration / this.config.priceCheckInterval;
     const profitFraction = this.config.quoteAmount.mul(this.config.takeProfit).numerator.div(new BN(100));
     const profitAmount = new TokenAmount(this.config.quoteToken, profitFraction, true);
     const takeProfit = this.config.quoteAmount.add(profitAmount);
@@ -351,8 +356,6 @@ export class Bot {
     const lossAmount = new TokenAmount(this.config.quoteToken, lossFraction, true);
     const stopLoss = this.config.quoteAmount.subtract(lossAmount);
     const slippage = new Percent(this.config.sellSlippage, 100);
-
-    const timesToCheck = this.config.priceCheckDuration / this.config.priceCheckInterval;
     let timesChecked = 0;
 
     do {

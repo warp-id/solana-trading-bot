@@ -43,7 +43,7 @@ You should see the following output:
 - `TRANSACTION_EXECUTOR` - Set to `warp` to use warp infrastructure for executing transactions
   - For more details checkout [warp](#warp-transactions-beta) section
 - `WARP_FEE` - If using warp executor this value will be used for transaction fees instead of `COMPUTE_UNIT_LIMIT` and `COMPUTE_UNIT_LIMIT`
-  - Minimum value is 0.0001 SOL, but we recommend using 0.006 SOL or above 
+  - Minimum value is 0.001 SOL, but we recommend using 0.006 SOL or above 
 #### Buy
 - `QUOTE_MINT` - Amount used to buy each new token.
 - `QUOTE_AMOUNT` - Which pools to snipe, USDC or WSOL.

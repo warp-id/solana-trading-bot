@@ -75,7 +75,7 @@ You should see the following output:
 - `MAX_POOL_SIZE` - Bot will buy only if the pool size is less than the specified amount.
   - Set `0` to disable.
 
-## Warp transactions
+## Warp transactions (beta)
 In case you experience a lot of failed transactions or transaction performance is too slow, you can try using `warp` for executing transactions.
 Warp is hosted service that executes transactions using integrations with third party providers.
 
@@ -90,7 +90,7 @@ Each request is processed by hosted service and sent to third party provider.
 Note: Warp transactions are disabled by default.
 
 ### Fees
-When using warp for transactions, fee is distributed between devlopers of warp and third party providers.
+When using warp for transactions, fee is distributed between developers of warp and third party providers.
 In case TX fails, no fee will be taken from your account.
 
 ## Common issues

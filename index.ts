@@ -4,7 +4,7 @@ import { Connection, KeyedAccountInfo, Keypair } from '@solana/web3.js';
 import { LIQUIDITY_STATE_LAYOUT_V4, MARKET_STATE_LAYOUT_V3, Token, TokenAmount } from '@raydium-io/raydium-sdk';
 import { AccountLayout, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { Bot, BotConfig } from './bot';
-import { DefaultTransactionExecutor } from './transactions';
+import { DefaultTransactionExecutor, TransactionExecutor } from './transactions';
 import {
   getToken,
   getWallet,
@@ -36,16 +36,20 @@ import {
   BUY_SLIPPAGE,
   SELL_SLIPPAGE,
   PRICE_CHECK_DURATION,
-  PRICE_CHECK_INTERVAL, SNIPE_LIST_REFRESH_INTERVAL,
+  PRICE_CHECK_INTERVAL,
+  SNIPE_LIST_REFRESH_INTERVAL,
+  TRANSACTION_EXECUTOR,
+  WARP_FEE,
 } from './helpers';
 import { version } from './package.json';
+import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
 
 const connection = new Connection(RPC_ENDPOINT, {
   wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
   commitment: COMMITMENT_LEVEL,
 });
 
-function printDetails(wallet: Keypair, quoteToken: Token, botConfig: BotConfig) {
+function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
   logger.info(`  
                                         ..   :-===++++-     
                                 .-==+++++++- =+++++++++-    
@@ -64,12 +68,22 @@ function printDetails(wallet: Keypair, quoteToken: Token, botConfig: BotConfig) 
           Version: ${version}                                          
   `);
 
+  const botConfig = bot.config;
+
   logger.info('------- CONFIGURATION START -------');
   logger.info(`Wallet: ${wallet.publicKey.toString()}`);
 
   logger.info('- Bot -');
-  logger.info(`Compute Unit limit: ${botConfig.unitLimit}`);
-  logger.info(`Compute Unit price (micro lamports): ${botConfig.unitPrice}`);
+
+  logger.info(`Using warp: ${bot.isWarp}`);
+  if (bot.isWarp) {
+    logger.info(`Warp fee: ${WARP_FEE}`);
+  }
+  else {
+    logger.info(`Compute Unit limit: ${botConfig.unitLimit}`);
+    logger.info(`Compute Unit price (micro lamports): ${botConfig.unitPrice}`);
+  }
+
   logger.info(`Single token at the time: ${botConfig.oneTokenAtATime}`);
   logger.info(`Pre load existing markets: ${PRE_LOAD_EXISTING_MARKETS}`);
   logger.info(`Cache new markets: ${CACHE_NEW_MARKETS}`);
@@ -111,7 +125,19 @@ const runListener = async () => {
 
   const marketCache = new MarketCache(connection);
   const poolCache = new PoolCache();
-  const txExecutor = new DefaultTransactionExecutor(connection);
+  let txExecutor: TransactionExecutor;
+
+  switch (TRANSACTION_EXECUTOR) {
+    case 'warp': {
+      txExecutor = new WarpTransactionExecutor(WARP_FEE);
+      break;
+    }
+    default: {
+      txExecutor = new DefaultTransactionExecutor(connection);
+      break;
+    }
+  }
+
   const wallet = getWallet(PRIVATE_KEY.trim());
   const quoteToken = getToken(QUOTE_MINT);
   const botConfig = <BotConfig>{
@@ -186,7 +212,7 @@ const runListener = async () => {
     await bot.sell(updatedAccountInfo.accountId, accountData);
   });
 
-  printDetails(wallet, quoteToken, botConfig);
+  printDetails(wallet, quoteToken, bot);
 };
 
 runListener();

@@ -18,7 +18,7 @@ export class PoolSizeFilter implements Filter {
       let inRange = true;
 
       if (!this.maxPoolSize?.isZero()) {
-        inRange = poolSize.lt(this.maxPoolSize);
+        inRange = poolSize.raw.lte(this.maxPoolSize.raw);
 
         if (!inRange) {
           return { ok: false, message: `PoolSize -> Pool size ${poolSize.toFixed()} > ${this.maxPoolSize.toFixed()}` };
@@ -26,7 +26,7 @@ export class PoolSizeFilter implements Filter {
       }
 
       if (!this.minPoolSize?.isZero()) {
-        inRange = poolSize.gt(this.minPoolSize);
+        inRange = poolSize.raw.gte(this.minPoolSize.raw);
 
         if (!inRange) {
           return { ok: false, message: `PoolSize -> Pool size ${poolSize.toFixed()} < ${this.minPoolSize.toFixed()}` };

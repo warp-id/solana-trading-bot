@@ -12,6 +12,7 @@
     "@solana/spl-token": "^0.4.0",
     "@solana/web3.js": "^1.89.1",
     "async-mutex": "^0.5.0",
+    "axios": "^1.6.8",
     "bigint-buffer": "^1.1.5",
     "bip39": "^3.1.0",
     "bn.js": "^5.2.1",

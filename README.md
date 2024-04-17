@@ -43,7 +43,9 @@ You should see the following output:
 - `TRANSACTION_EXECUTOR` - Set to `warp` to use warp infrastructure for executing transactions
   - For more details checkout [warp](#warp-transactions-beta) section
 - `WARP_FEE` - If using warp executor this value will be used for transaction fees instead of `COMPUTE_UNIT_LIMIT` and `COMPUTE_UNIT_LIMIT`
-  - Minimum value is 0.001 SOL, but we recommend using 0.006 SOL or above 
+  - Minimum value is 0.0001 SOL, but we recommend using 0.006 SOL or above 
+  - On top of this fee, minimal solana network fee will be applied
+
 #### Buy
 - `QUOTE_MINT` - Amount used to buy each new token.
 - `QUOTE_AMOUNT` - Which pools to snipe, USDC or WSOL.
@@ -69,10 +71,10 @@ You should see the following output:
   - Pool must not exist before the script starts.
 - `SNIPE_LIST_REFRESH_INTERVAL` - Interval in milliseconds to refresh the snipe list.
 - `CHECK_IF_MINT_IS_RENOUNCED` - Set to `true` to buy tokens only if their mint is renounced.
-- `CHECK_IF_BURNED` - Set to `true` to buy tokens only if their liqudity pool is burned.
-- `MIN_POOL_SIZE` - Bot will buy only if the pool size is greater than the specified amount.
+- `CHECK_IF_BURNED` - Set to `true` to buy tokens only if their liquidity pool is burned.
+- `MIN_POOL_SIZE` - Bot will buy only if the pool size is greater than or equal the specified amount.
   - Set `0` to disable.
-- `MAX_POOL_SIZE` - Bot will buy only if the pool size is less than the specified amount.
+- `MAX_POOL_SIZE` - Bot will buy only if the pool size is less than or equal the specified amount.
   - Set `0` to disable.
 
 ## Warp transactions (beta)

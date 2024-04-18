@@ -47,8 +47,8 @@ You should see the following output:
   - On top of this fee, minimal solana network fee will be applied
 
 #### Buy
-- `QUOTE_MINT` - Amount used to buy each new token.
-- `QUOTE_AMOUNT` - Which pools to snipe, USDC or WSOL.
+- `QUOTE_MINT` - Which pools to snipe, USDC or WSOL.
+- `QUOTE_AMOUNT` - Amount used to buy each new token.
 - `AUTO_BUY_DELAY` - Delay in milliseconds before buying a token.
 - `MAX_BUY_RETRIES` - Maximum number of retries for buying a token.
 - `BUY_SLIPPAGE` - Slippage %

@@ -15,6 +15,7 @@ import {
   PRE_LOAD_EXISTING_MARKETS,
   LOG_LEVEL,
   CHECK_IF_MINT_IS_RENOUNCED,
+  CHECK_IF_FREEZABLE,
   CHECK_IF_BURNED,
   QUOTE_MINT,
   MAX_POOL_SIZE,
@@ -115,6 +116,7 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
   logger.info(`Filter check duration: ${botConfig.filterCheckDuration} ms`);
   logger.info(`Consecutive filter matches: ${botConfig.consecutiveMatchCount} ms`);
   logger.info(`Check renounced: ${botConfig.checkRenounced}`);
+  logger.info(`Check freezable: ${botConfig.checkFreezable}`);
   logger.info(`Check burned: ${botConfig.checkBurned}`);
   logger.info(`Min pool size: ${botConfig.minPoolSize.toFixed()}`);
   logger.info(`Max pool size: ${botConfig.maxPoolSize.toFixed()}`);
@@ -149,6 +151,7 @@ const runListener = async () => {
     wallet,
     quoteAta: getAssociatedTokenAddressSync(quoteToken.mint, wallet.publicKey),
     checkRenounced: CHECK_IF_MINT_IS_RENOUNCED,
+    checkFreezable: CHECK_IF_FREEZABLE,
     checkBurned: CHECK_IF_BURNED,
     minPoolSize: new TokenAmount(quoteToken, MIN_POOL_SIZE, false),
     maxPoolSize: new TokenAmount(quoteToken, MAX_POOL_SIZE, false),

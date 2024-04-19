@@ -40,6 +40,9 @@ import {
   SNIPE_LIST_REFRESH_INTERVAL,
   TRANSACTION_EXECUTOR,
   WARP_FEE,
+  FILTER_CHECK_INTERVAL,
+  FILTER_CHECK_DURATION,
+  CONSECUTIVE_FILTER_MATCHES,
 } from './helpers';
 import { version } from './package.json';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
@@ -78,8 +81,7 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
   logger.info(`Using warp: ${bot.isWarp}`);
   if (bot.isWarp) {
     logger.info(`Warp fee: ${WARP_FEE}`);
-  }
-  else {
+  } else {
     logger.info(`Compute Unit limit: ${botConfig.unitLimit}`);
     logger.info(`Compute Unit price (micro lamports): ${botConfig.unitPrice}`);
   }
@@ -109,6 +111,9 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
   logger.info('- Filters -');
   logger.info(`Snipe list: ${botConfig.useSnipeList}`);
   logger.info(`Snipe list refresh interval: ${SNIPE_LIST_REFRESH_INTERVAL} ms`);
+  logger.info(`Filter check interval: ${botConfig.filterCheckInterval} ms`);
+  logger.info(`Filter check duration: ${botConfig.filterCheckDuration} ms`);
+  logger.info(`Consecutive filter matches: ${botConfig.consecutiveMatchCount} ms`);
   logger.info(`Check renounced: ${botConfig.checkRenounced}`);
   logger.info(`Check burned: ${botConfig.checkBurned}`);
   logger.info(`Min pool size: ${botConfig.minPoolSize.toFixed()}`);
@@ -151,6 +156,7 @@ const runListener = async () => {
     quoteAmount: new TokenAmount(quoteToken, QUOTE_AMOUNT, false),
     oneTokenAtATime: ONE_TOKEN_AT_A_TIME,
     useSnipeList: USE_SNIPE_LIST,
+    autoSell: AUTO_SELL,
     autoSellDelay: AUTO_SELL_DELAY,
     maxSellRetries: MAX_SELL_RETRIES,
     autoBuyDelay: AUTO_BUY_DELAY,
@@ -163,6 +169,9 @@ const runListener = async () => {
     sellSlippage: SELL_SLIPPAGE,
     priceCheckInterval: PRICE_CHECK_INTERVAL,
     priceCheckDuration: PRICE_CHECK_DURATION,
+    filterCheckInterval: FILTER_CHECK_INTERVAL,
+    filterCheckDuration: FILTER_CHECK_DURATION,
+    consecutiveMatchCount: CONSECUTIVE_FILTER_MATCHES,
   };
 
   const bot = new Bot(connection, marketCache, poolCache, txExecutor, botConfig);

@@ -1,11 +1,9 @@
 
-# Solana Sniper Bot (Poc)
-This code is written as proof of concept to demonstrate how we can buy new tokens immediately after the liquidity pool is open for trading.
+# Solana Trading Bot (Beta)
+The Solana Trading Bot is a software tool designed to automate the buying and selling of tokens on the Solana blockchain. 
+It is configured to execute trades based on predefined parameters and strategies set by the user. 
 
-Script listens to new Raydium USDC or SOL pools and buys tokens for a fixed amount in USDC/SOL.  
-Depending on the speed of the RPC node, the purchase usually happens before the token is available on Raydium UI for swapping.
-
-This is provided as is, for learning purposes.
+The bot can monitor market conditions in real-time, such as pool burn, mint renounced and other factors, and it will execute trades when these conditions are fulfilled.
 
 ## Setup
 To run the script you need to:
@@ -55,11 +53,14 @@ You should see the following output:
 
 #### Sell
 - `AUTO_SELL` - Set to `true` to enable automatic selling of tokens.
+  - If you want to manually sell bought tokens, disable this option.
 - `MAX_SELL_RETRIES` - Maximum number of retries for selling a token.
 - `AUTO_SELL_DELAY` -  Delay in milliseconds before auto-selling a token.
 - `PRICE_CHECK_INTERVAL` - Interval in milliseconds for checking the take profit and stop loss conditions.
+  - Set to zero to disable take profit and stop loss.
 - `PRICE_CHECK_DURATION` - Time in milliseconds to wait for stop loss/take profit conditions.
   - If you don't reach profit or loss bot will auto sell after this time.
+  - Set to zero to disable take profit and stop loss.
 - `TAKE_PROFIT` - Percentage profit at which to take profit.
   - Take profit is calculated based on quote mint.
 - `STOP_LOSS` - Percentage loss at which to stop the loss.
@@ -67,6 +68,13 @@ You should see the following output:
 - `SELL_SLIPPAGE` - Slippage %.
 
 #### Filters
+- `FILTER_CHECK_INTERVAL` - Interval in milliseconds for checking if pool match the filters.
+  - Set to zero to disable filters.
+- `FILTER_CHECK_DURATION` - Time in milliseconds to wait for pool to match the filters.
+  - If pool doesn't match the filter buy will not happen.
+  - Set to zero to disable filters.
+- `CONSECUTIVE_FILTER_MATCHES` - How many times in a row pool needs to match the filters.
+  - This is useful because when pool is burned (and rugged), other filters may not report the same behavior. eg. pool size may still have old value
 - `USE_SNIPE_LIST` - Set to `true` to enable buying only tokens listed in `snipe-list.txt`.
   - Pool must not exist before the script starts.
 - `SNIPE_LIST_REFRESH_INTERVAL` - Interval in milliseconds to refresh the snipe list.
@@ -123,4 +131,6 @@ To collect more information on an issue, please change `LOG_LEVEL` to `debug`.
 
 ## Disclaimer
 
-Use this script at your own risk.
+The Solana Trading Bot is provided as is, for learning purposes.
+Trading cryptocurrencies and tokens involves risk, and past performance is not indicative of future results.
+The use of this bot is at your own risk, and we are not responsible for any losses incurred while using the bot.

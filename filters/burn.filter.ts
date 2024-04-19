@@ -1,14 +1,14 @@
 import { Filter, FilterResult } from './pool-filters';
 import { Connection } from '@solana/web3.js';
-import { LiquidityStateV4 } from '@raydium-io/raydium-sdk';
+import { LiquidityPoolKeysV4 } from '@raydium-io/raydium-sdk';
 import { logger } from '../helpers';
 
 export class BurnFilter implements Filter {
   constructor(private readonly connection: Connection) {}
 
-  async execute(poolState: LiquidityStateV4): Promise<FilterResult> {
+  async execute(poolKeys: LiquidityPoolKeysV4): Promise<FilterResult> {
     try {
-      const amount = await this.connection.getTokenSupply(poolState.lpMint, this.connection.commitment);
+      const amount = await this.connection.getTokenSupply(poolKeys.lpMint, this.connection.commitment);
       const burned = amount.value.uiAmount === 0;
       return { ok: burned, message: burned ? undefined : "Burned -> Creator didn't burn LP" };
     } catch (e: any) {
@@ -16,7 +16,7 @@ export class BurnFilter implements Filter {
         return { ok: true };
       }
 
-      logger.error({ mint: poolState.baseMint }, `Failed to check if LP is burned`);
+      logger.error({ mint: poolKeys.baseMint }, `Failed to check if LP is burned`);
     }
 
     return { ok: false, message: 'Failed to check if LP is burned' };

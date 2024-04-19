@@ -1,12 +1,12 @@
 import { Connection } from '@solana/web3.js';
-import { LiquidityStateV4, Token, TokenAmount } from '@raydium-io/raydium-sdk';
+import { LiquidityPoolKeysV4, Token, TokenAmount } from '@raydium-io/raydium-sdk';
 import { BurnFilter } from './burn.filter';
 import { RenouncedFilter } from './renounced.filter';
 import { PoolSizeFilter } from './pool-size.filter';
 import { CHECK_IF_BURNED, CHECK_IF_MINT_IS_RENOUNCED, logger } from '../helpers';
 
 export interface Filter {
-  execute(poolState: LiquidityStateV4): Promise<FilterResult>;
+  execute(poolKeysV4: LiquidityPoolKeysV4): Promise<FilterResult>;
 }
 
 export interface FilterResult {
@@ -40,12 +40,12 @@ export class PoolFilters {
     }
   }
 
-  public async execute(poolState: LiquidityStateV4): Promise<boolean> {
+  public async execute(poolKeys: LiquidityPoolKeysV4): Promise<boolean> {
     if (this.filters.length === 0) {
       return true;
     }
 
-    const result = await Promise.all(this.filters.map((f) => f.execute(poolState)));
+    const result = await Promise.all(this.filters.map((f) => f.execute(poolKeys)));
     const pass = result.every((r) => r.ok);
 
     if (pass) {
@@ -53,7 +53,7 @@ export class PoolFilters {
     }
 
     for (const filterResult of result.filter((r) => !r.ok)) {
-      logger.info(filterResult.message);
+      logger.trace(filterResult.message);
     }
 
     return false;

@@ -1,5 +1,5 @@
 import { Filter, FilterResult } from './pool-filters';
-import { LiquidityStateV4, Token, TokenAmount } from '@raydium-io/raydium-sdk';
+import { LiquidityPoolKeysV4, Token, TokenAmount } from '@raydium-io/raydium-sdk';
 import { Connection } from '@solana/web3.js';
 import { logger } from '../helpers';
 
@@ -11,9 +11,9 @@ export class PoolSizeFilter implements Filter {
     private readonly maxPoolSize: TokenAmount,
   ) {}
 
-  async execute(poolState: LiquidityStateV4): Promise<FilterResult> {
+  async execute(poolKeys: LiquidityPoolKeysV4): Promise<FilterResult> {
     try {
-      const response = await this.connection.getTokenAccountBalance(poolState.quoteVault, this.connection.commitment);
+      const response = await this.connection.getTokenAccountBalance(poolKeys.quoteVault, this.connection.commitment);
       const poolSize = new TokenAmount(this.quoteToken, response.value.amount, true);
       let inRange = true;
 
@@ -35,7 +35,7 @@ export class PoolSizeFilter implements Filter {
 
       return { ok: inRange };
     } catch (error) {
-      logger.error({ mint: poolState.baseMint }, `Failed to check pool size`);
+      logger.error({ mint: poolKeys.baseMint }, `Failed to check pool size`);
     }
 
     return { ok: false, message: 'PoolSize -> Failed to check pool size' };

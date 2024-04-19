@@ -74,7 +74,7 @@ You should see the following output:
   - If pool doesn't match the filter buy will not happen.
   - Set to zero to disable filters.
 - `CONSECUTIVE_FILTER_MATCHES` - How many times in a row pool needs to match the filters.
-  - This is useful because when pool is burned (and rugged), other filters may not report the same behavior because of distributed RPC endpoints (eg. helius network)
+  - This is useful because when pool is burned (and rugged), other filters may not report the same behavior. eg. pool size may still have old value
 - `USE_SNIPE_LIST` - Set to `true` to enable buying only tokens listed in `snipe-list.txt`.
   - Pool must not exist before the script starts.
 - `SNIPE_LIST_REFRESH_INTERVAL` - Interval in milliseconds to refresh the snipe list.

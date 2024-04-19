@@ -47,6 +47,9 @@ export interface BotConfig {
   sellSlippage: number;
   priceCheckInterval: number;
   priceCheckDuration: number;
+  filterCheckInterval: number;
+  filterCheckDuration: number;
+  consecutiveMatchCount: number;
 }
 
 export class Bot {
@@ -121,21 +124,21 @@ export class Bot {
     }
 
     try {
-      const shouldBuy = await this.poolFilters.execute(poolState);
+      const [market, mintAta] = await Promise.all([
+        this.marketStorage.get(poolState.marketId.toString()),
+        getAssociatedTokenAddress(poolState.baseMint, this.config.wallet.publicKey),
+      ]);
+      const poolKeys: LiquidityPoolKeysV4 = createPoolKeys(accountId, poolState, market);
 
-      if (!shouldBuy) {
-        logger.debug({ mint: poolState.baseMint.toString() }, `Skipping buy because pool doesn't match filters`);
+      const match = await this.filterMatch(poolKeys);
+
+      if (!match) {
+        logger.trace({ mint: poolKeys.baseMint.toString() }, `Skipping buy because pool doesn't match filters`);
         return;
       }
 
       for (let i = 0; i < this.config.maxBuyRetries; i++) {
         try {
-          const [market, mintAta] = await Promise.all([
-            this.marketStorage.get(poolState.marketId.toString()),
-            getAssociatedTokenAddress(poolState.baseMint, this.config.wallet.publicKey),
-          ]);
-          const poolKeys: LiquidityPoolKeysV4 = createPoolKeys(accountId, poolState, market);
-
           logger.info(
             { mint: poolState.baseMint.toString() },
             `Send buy transaction attempt: ${i + 1}/${this.config.maxBuyRetries}`,
@@ -214,13 +217,13 @@ export class Bot {
         await sleep(this.config.autoSellDelay);
       }
 
+      const market = await this.marketStorage.get(poolData.state.marketId.toString());
+      const poolKeys: LiquidityPoolKeysV4 = createPoolKeys(new PublicKey(poolData.id), poolData.state, market);
+
+      await this.priceMatch(tokenAmountIn, poolKeys);
+
       for (let i = 0; i < this.config.maxSellRetries; i++) {
         try {
-          const market = await this.marketStorage.get(poolData.state.marketId.toString());
-          const poolKeys: LiquidityPoolKeysV4 = createPoolKeys(new PublicKey(poolData.id), poolData.state, market);
-
-          await this.priceMatch(tokenAmountIn, poolKeys);
-
           logger.info(
             { mint: rawAccount.mint },
             `Send sell transaction attempt: ${i + 1}/${this.config.maxSellRetries}`,
@@ -340,6 +343,42 @@ export class Bot {
     transaction.sign([wallet, ...innerTransaction.signers]);
 
     return this.txExecutor.executeAndConfirm(transaction, wallet, latestBlockhash);
+  }
+
+  private async filterMatch(poolKeys: LiquidityPoolKeysV4) {
+    if (this.config.filterCheckInterval === 0 || this.config.filterCheckDuration === 0) {
+      return;
+    }
+
+    const timesToCheck = this.config.filterCheckDuration / this.config.filterCheckInterval;
+    let timesChecked = 0;
+    let matchCount = 0;
+
+    do {
+      try {
+        const shouldBuy = await this.poolFilters.execute(poolKeys);
+
+        if (shouldBuy) {
+          matchCount++;
+
+          if (this.config.consecutiveMatchCount <= matchCount) {
+            logger.debug(
+              { mint: poolKeys.baseMint.toString() },
+              `Filter match ${matchCount}/${this.config.consecutiveMatchCount}`,
+            );
+            return true;
+          }
+        } else {
+          matchCount = 0;
+        }
+
+        await sleep(this.config.filterCheckInterval);
+      } finally {
+        timesChecked++;
+      }
+    } while (timesChecked < timesToCheck);
+
+    return false;
   }
 
   private async priceMatch(amountIn: TokenAmount, poolKeys: LiquidityPoolKeysV4) {

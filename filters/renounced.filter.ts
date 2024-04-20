@@ -8,6 +8,7 @@ export class RenouncedFreezeFilter implements Filter {
   constructor(private readonly connection: Connection, private readonly checkRenounced: boolean, private readonly checkFreezable: boolean) {}
 
   async execute(poolKeys: LiquidityPoolKeysV4): Promise<FilterResult> {
+    const errorMessage = [ this.checkRenounced ? 'mint' : undefined, this.checkFreezable ? 'freeze' : undefined ].filter((e) => e !== undefined);
     try {
       const accountInfo = await this.connection.getAccountInfo(poolKeys.baseMint, this.connection.commitment);
       if (!accountInfo?.data) {
@@ -23,9 +24,9 @@ export class RenouncedFreezeFilter implements Filter {
 
       return { ok: ok, message: ok ? undefined : `RenouncedFreeze -> Creator can ${message.join(' and ')} tokens` };
     } catch (e) {
-      logger.error({ mint: poolKeys.baseMint }, `Failed to check if mint is renounced and freezable`);
+      logger.error({ mint: poolKeys.baseMint }, `RenouncedFreeze -> Failed to check if creator can ${errorMessage.join(' and ')} tokens`);
     }
 
-    return { ok: false, message: 'Renounced -> Failed to check if mint is renounced and freezable' };
+    return { ok: false, message: `RenouncedFreeze -> Failed to check if creator can ${errorMessage.join(' and ')} tokens` };
   }
 }

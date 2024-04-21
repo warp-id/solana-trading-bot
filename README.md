@@ -67,6 +67,15 @@ You should see the following output:
   - Stop loss is calculated based on quote mint.
 - `SELL_SLIPPAGE` - Slippage %.
 
+#### Snipe list
+- `USE_SNIPE_LIST` - Set to `true` to enable buying only tokens listed in `snipe-list.txt`.
+  - Pool must not exist before the bot starts.
+  - If token can be traded before bot starts nothing will happen. Bot will not buy the token.
+- `SNIPE_LIST_REFRESH_INTERVAL` - Interval in milliseconds to refresh the snipe list.
+  - You can update snipe list while bot is running. It will pickup the new changes each time it does refresh.
+
+Note: When using snipe list filters below will be disabled.
+
 #### Filters
 - `FILTER_CHECK_INTERVAL` - Interval in milliseconds for checking if pool match the filters.
   - Set to zero to disable filters.
@@ -75,9 +84,6 @@ You should see the following output:
   - Set to zero to disable filters.
 - `CONSECUTIVE_FILTER_MATCHES` - How many times in a row pool needs to match the filters.
   - This is useful because when pool is burned (and rugged), other filters may not report the same behavior. eg. pool size may still have old value
-- `USE_SNIPE_LIST` - Set to `true` to enable buying only tokens listed in `snipe-list.txt`.
-  - Pool must not exist before the script starts.
-- `SNIPE_LIST_REFRESH_INTERVAL` - Interval in milliseconds to refresh the snipe list.
 - `CHECK_IF_MUTABLE` - Set to `true` to buy tokens only if their metadata are not mutable.
 - `CHECK_IF_MINT_IS_RENOUNCED` - Set to `true` to buy tokens only if their mint is renounced.
 - `CHECK_IF_FREEZABLE` - Set to `true` to buy tokens only if they are not freezable.

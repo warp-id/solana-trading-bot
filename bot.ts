@@ -26,6 +26,7 @@ import { WarpTransactionExecutor } from './transactions/warp-transaction-executo
 export interface BotConfig {
   wallet: Keypair;
   checkRenounced: boolean;
+  checkFreezable: boolean;
   checkBurned: boolean;
   minPoolSize: TokenAmount;
   maxPoolSize: TokenAmount;

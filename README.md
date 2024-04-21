@@ -79,6 +79,7 @@ You should see the following output:
   - Pool must not exist before the script starts.
 - `SNIPE_LIST_REFRESH_INTERVAL` - Interval in milliseconds to refresh the snipe list.
 - `CHECK_IF_MINT_IS_RENOUNCED` - Set to `true` to buy tokens only if their mint is renounced.
+- `CHECK_IF_FREEZABLE` - Set to `true` to buy tokens only if they are not freezable.
 - `CHECK_IF_BURNED` - Set to `true` to buy tokens only if their liquidity pool is burned.
 - `MIN_POOL_SIZE` - Bot will buy only if the pool size is greater than or equal the specified amount.
   - Set `0` to disable.

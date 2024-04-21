@@ -15,7 +15,7 @@ export class DefaultTransactionExecutor implements TransactionExecutor {
     transaction: VersionedTransaction,
     payer: Keypair,
     latestBlockhash: BlockhashWithExpiryBlockHeight,
-  ): Promise<{ confirmed: boolean; signature?: string }> {
+  ): Promise<{ confirmed: boolean; signature?: string, error?: string }> {
     logger.debug('Executing transaction...');
     const signature = await this.execute(transaction);
 

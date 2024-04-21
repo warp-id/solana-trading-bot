@@ -12,7 +12,7 @@ export class RenouncedFreezeFilter implements Filter {
     try {
       const accountInfo = await this.connection.getAccountInfo(poolKeys.baseMint, this.connection.commitment);
       if (!accountInfo?.data) {
-        return { ok: false, message: 'Failed to fetch account data' };
+        return { ok: false, message: 'RenouncedFreeze -> Failed to fetch account data' };
       }
 
       const deserialize = MintLayout.decode(accountInfo.data);

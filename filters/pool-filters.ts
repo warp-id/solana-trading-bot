@@ -1,5 +1,6 @@
 import { Connection } from '@solana/web3.js';
 import { LiquidityPoolKeysV4, Token, TokenAmount } from '@raydium-io/raydium-sdk';
+import { getMetadataAccountDataSerializer } from '@metaplex-foundation/mpl-token-metadata';
 import { BurnFilter } from './burn.filter';
 import { MutableFilter } from './mutable.filter';
 import { RenouncedFreezeFilter } from './renounced.filter';
@@ -37,7 +38,7 @@ export class PoolFilters {
     }
 
     if (CHECK_IF_MUTABLE) {
-      this.filters.push(new MutableFilter(connection));
+      this.filters.push(new MutableFilter(connection, getMetadataAccountDataSerializer()));
     }
 
     if (!args.minPoolSize.isZero() || !args.maxPoolSize.isZero()) {

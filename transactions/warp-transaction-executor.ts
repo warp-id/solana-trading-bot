@@ -41,7 +41,7 @@ export class WarpTransactionExecutor implements TransactionExecutor {
       const warpFeeTx = new VersionedTransaction(warpFeeMessage);
       warpFeeTx.sign([payer]);
 
-      const response = await axios.post<{ confirmed: boolean; signature: string }>(
+      const response = await axios.post<{ confirmed: boolean; signature: string, error?: string }>(
         'https://tx.warp.id/transaction/execute',
         {
           transactions: [bs58.encode(warpFeeTx.serialize()), bs58.encode(transaction.serialize())],

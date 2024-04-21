@@ -173,6 +173,7 @@ export class Bot {
             {
               mint: poolState.baseMint.toString(),
               signature: result.signature,
+              error: result.error,
             },
             `Error confirming buy tx`,
           );
@@ -258,6 +259,7 @@ export class Bot {
             {
               mint: rawAccount.mint.toString(),
               signature: result.signature,
+              error: result.error,
             },
             `Error confirming sell tx`,
           );

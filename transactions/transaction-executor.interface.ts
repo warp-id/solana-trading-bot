@@ -5,5 +5,5 @@ export interface TransactionExecutor {
     transaction: VersionedTransaction,
     payer: Keypair,
     latestBlockHash: BlockhashWithExpiryBlockHeight,
-  ): Promise<{ confirmed: boolean; signature?: string }>;
+  ): Promise<{ confirmed: boolean; signature?: string, error?: string }>;
 }

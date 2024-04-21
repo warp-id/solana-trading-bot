@@ -131,11 +131,13 @@ export class Bot {
       ]);
       const poolKeys: LiquidityPoolKeysV4 = createPoolKeys(accountId, poolState, market);
 
-      const match = await this.filterMatch(poolKeys);
+      if (!this.config.useSnipeList) {
+        const match = await this.filterMatch(poolKeys);
 
-      if (!match) {
-        logger.trace({ mint: poolKeys.baseMint.toString() }, `Skipping buy because pool doesn't match filters`);
-        return;
+        if (!match) {
+          logger.trace({ mint: poolKeys.baseMint.toString() }, `Skipping buy because pool doesn't match filters`);
+          return;
+        }
       }
 
       for (let i = 0; i < this.config.maxBuyRetries; i++) {

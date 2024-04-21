@@ -353,7 +353,7 @@ export class Bot {
 
   private async filterMatch(poolKeys: LiquidityPoolKeysV4) {
     if (this.config.filterCheckInterval === 0 || this.config.filterCheckDuration === 0) {
-      return;
+      return true;
     }
 
     const timesToCheck = this.config.filterCheckDuration / this.config.filterCheckInterval;

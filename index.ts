@@ -114,7 +114,7 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
   logger.info(`Snipe list refresh interval: ${SNIPE_LIST_REFRESH_INTERVAL} ms`);
   logger.info(`Filter check interval: ${botConfig.filterCheckInterval} ms`);
   logger.info(`Filter check duration: ${botConfig.filterCheckDuration} ms`);
-  logger.info(`Consecutive filter matches: ${botConfig.consecutiveMatchCount} ms`);
+  logger.info(`Consecutive filter matches: ${botConfig.consecutiveMatchCount}`);
   logger.info(`Check renounced: ${botConfig.checkRenounced}`);
   logger.info(`Check freezable: ${botConfig.checkFreezable}`);
   logger.info(`Check burned: ${botConfig.checkBurned}`);

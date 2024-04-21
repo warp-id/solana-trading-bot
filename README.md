@@ -78,6 +78,7 @@ You should see the following output:
 - `USE_SNIPE_LIST` - Set to `true` to enable buying only tokens listed in `snipe-list.txt`.
   - Pool must not exist before the script starts.
 - `SNIPE_LIST_REFRESH_INTERVAL` - Interval in milliseconds to refresh the snipe list.
+- `CHECK_IF_MUTABLE` - Set to `true` to buy tokens only if their metadata are not mutable.
 - `CHECK_IF_MINT_IS_RENOUNCED` - Set to `true` to buy tokens only if their mint is renounced.
 - `CHECK_IF_FREEZABLE` - Set to `true` to buy tokens only if they are not freezable.
 - `CHECK_IF_BURNED` - Set to `true` to buy tokens only if their liquidity pool is burned.

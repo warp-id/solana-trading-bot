@@ -109,17 +109,24 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
   logger.info(`Take profit: ${botConfig.takeProfit}%`);
   logger.info(`Stop loss: ${botConfig.stopLoss}%`);
 
-  logger.info('- Filters -');
+  logger.info('- Snipe list -');
   logger.info(`Snipe list: ${botConfig.useSnipeList}`);
   logger.info(`Snipe list refresh interval: ${SNIPE_LIST_REFRESH_INTERVAL} ms`);
-  logger.info(`Filter check interval: ${botConfig.filterCheckInterval} ms`);
-  logger.info(`Filter check duration: ${botConfig.filterCheckDuration} ms`);
-  logger.info(`Consecutive filter matches: ${botConfig.consecutiveMatchCount} ms`);
-  logger.info(`Check renounced: ${botConfig.checkRenounced}`);
-  logger.info(`Check freezable: ${botConfig.checkFreezable}`);
-  logger.info(`Check burned: ${botConfig.checkBurned}`);
-  logger.info(`Min pool size: ${botConfig.minPoolSize.toFixed()}`);
-  logger.info(`Max pool size: ${botConfig.maxPoolSize.toFixed()}`);
+
+  if (botConfig.useSnipeList) {
+    logger.info('- Filters -');
+    logger.info(`Filters are disabled when snipe list is on`);
+  } else {
+    logger.info('- Filters -');
+    logger.info(`Filter check interval: ${botConfig.filterCheckInterval} ms`);
+    logger.info(`Filter check duration: ${botConfig.filterCheckDuration} ms`);
+    logger.info(`Consecutive filter matches: ${botConfig.consecutiveMatchCount}`);
+    logger.info(`Check renounced: ${botConfig.checkRenounced}`);
+    logger.info(`Check freezable: ${botConfig.checkFreezable}`);
+    logger.info(`Check burned: ${botConfig.checkBurned}`);
+    logger.info(`Min pool size: ${botConfig.minPoolSize.toFixed()}`);
+    logger.info(`Max pool size: ${botConfig.maxPoolSize.toFixed()}`);
+  }
 
   logger.info('------- CONFIGURATION END -------');
 

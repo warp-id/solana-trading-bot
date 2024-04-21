@@ -276,6 +276,7 @@ export class Bot {
     }
   }
 
+  // noinspection JSUnusedLocalSymbols
   private async swap(
     poolKeys: LiquidityPoolKeysV4,
     ataIn: PublicKey,

@@ -100,7 +100,7 @@ export class Bot {
   }
 
   public async buy(accountId: PublicKey, poolState: LiquidityStateV4) {
-    logger.trace({ mint: poolState.baseMint }, `Processing buy...`);
+    logger.trace({ mint: poolState.baseMint }, `Processing new pool...`);
 
     if (this.config.useSnipeList && !this.snipeListCache?.isInList(poolState.baseMint.toString())) {
       logger.debug({ mint: poolState.baseMint.toString() }, `Skipping buy because token is not in a snipe list`);
@@ -172,7 +172,7 @@ export class Bot {
             break;
           }
 
-          logger.debug(
+          logger.info(
             {
               mint: poolState.baseMint.toString(),
               signature: result.signature,
@@ -199,7 +199,7 @@ export class Bot {
     }
 
     try {
-      logger.trace({ mint: rawAccount.mint }, `Processing sell...`);
+      logger.trace({ mint: rawAccount.mint }, `Processing new token...`);
 
       const poolData = await this.poolStorage.get(rawAccount.mint.toString());
 
@@ -271,7 +271,7 @@ export class Bot {
         }
       }
     } catch (error) {
-      logger.debug({ mint: rawAccount.mint.toString(), error }, `Failed to sell token`);
+      logger.error({ mint: rawAccount.mint.toString(), error }, `Failed to sell token`);
     } finally {
       if (this.config.oneTokenAtATime) {
         this.sellExecutionCount--;

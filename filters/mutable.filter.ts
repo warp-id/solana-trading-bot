@@ -11,7 +11,7 @@ export class MutableFilter implements Filter {
   async execute(poolKeys: LiquidityPoolKeysV4): Promise<FilterResult> {
     try {
       const metadataPDA = getPdaMetadataKey(poolKeys.baseMint);
-      const metadataAccount = await this.connection.getAccountInfo(new PublicKey(metadataPDA.publicKey.toString()));
+      const metadataAccount = await this.connection.getAccountInfo(metadataPDA.publicKey);
       if (!metadataAccount?.data) {
         return { ok: false, message: 'Mutable -> Failed to fetch account data' };
       }

@@ -83,7 +83,7 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
   logger.info(
     `Using ${TRANSACTION_EXECUTOR} executer: ${bot.isWarp || bot.isJito || (TRANSACTION_EXECUTOR === 'default' ? true : false)}`,
   );
-  if (bot.isWarp) {
+  if (bot.isWarp || bot.isJito) {
     logger.info(`${TRANSACTION_EXECUTOR} fee: ${CUSTOM_FEE}`);
   } else {
     logger.info(`Compute Unit limit: ${botConfig.unitLimit}`);

@@ -109,7 +109,7 @@ export class JitoTransactionExecutor implements TransactionExecutor {
       return { confirmed: false };
     } catch (error) {
       if (error instanceof AxiosError) {
-        logger.trace({ error: error.response?.data }, 'Failed to execute warp transaction');
+        logger.trace({ error: error.response?.data }, 'Failed to execute jito transaction');
       }
       logger.error('Error during transaction execution', error);
       return { confirmed: false };

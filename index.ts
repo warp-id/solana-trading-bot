@@ -80,8 +80,9 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
 
   logger.info('- Bot -');
 
-  logger.info(`Using warp: ${bot.isWarp}`);
-  logger.info(`Using jito: ${bot.isJito}`);
+  logger.info(
+    `Using ${TRANSACTION_EXECUTOR} executer: ${bot.isWarp || bot.isJito || (TRANSACTION_EXECUTOR === 'default' ? true : false)}`,
+  );
   if (bot.isWarp) {
     logger.info(`${TRANSACTION_EXECUTOR} fee: ${CUSTOM_FEE}`);
   } else {

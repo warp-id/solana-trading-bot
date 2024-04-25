@@ -23,7 +23,7 @@ import { Mutex } from 'async-mutex';
 import BN from 'bn.js';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
 import { JitoTransactionExecutor } from './transactions/jito-rpc-transaction-executor';
-
+import fs from 'fs';
 export interface BotConfig {
   wallet: Keypair;
   checkRenounced: boolean;
@@ -52,6 +52,7 @@ export interface BotConfig {
   filterCheckInterval: number;
   filterCheckDuration: number;
   consecutiveMatchCount: number;
+  simulateTx: boolean;
 }
 
 export class Bot {
@@ -160,9 +161,21 @@ export class Bot {
             this.config.buySlippage,
             this.config.wallet,
             'buy',
+            this.config.simulateTx,
           );
 
           if (result.confirmed) {
+            if (this.config.simulateTx) {
+              logger.info(
+                {
+                  mint: poolState.baseMint.toString(),
+                  signature: result.signature,
+                },
+                `Simulated buy tx`,
+              );
+              break;
+            }
+
             logger.info(
               {
                 mint: poolState.baseMint.toString(),
@@ -171,7 +184,6 @@ export class Bot {
               },
               `Confirmed buy tx`,
             );
-
             break;
           }
 
@@ -246,6 +258,7 @@ export class Bot {
             this.config.sellSlippage,
             this.config.wallet,
             'sell',
+            this.config.simulateTx,
           );
 
           if (result.confirmed) {
@@ -293,6 +306,7 @@ export class Bot {
     slippage: number,
     wallet: Keypair,
     direction: 'buy' | 'sell',
+    simulate: boolean
   ) {
     const slippagePercent = new Percent(slippage, 100);
     const poolInfo = await Liquidity.fetchInfo({
@@ -330,18 +344,18 @@ export class Bot {
         ...(this.isWarp || this.isJito
           ? []
           : [
-              ComputeBudgetProgram.setComputeUnitPrice({ microLamports: this.config.unitPrice }),
-              ComputeBudgetProgram.setComputeUnitLimit({ units: this.config.unitLimit }),
-            ]),
+            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: this.config.unitPrice }),
+            ComputeBudgetProgram.setComputeUnitLimit({ units: this.config.unitLimit }),
+          ]),
         ...(direction === 'buy'
           ? [
-              createAssociatedTokenAccountIdempotentInstruction(
-                wallet.publicKey,
-                ataOut,
-                wallet.publicKey,
-                tokenOut.mint,
-              ),
-            ]
+            createAssociatedTokenAccountIdempotentInstruction(
+              wallet.publicKey,
+              ataOut,
+              wallet.publicKey,
+              tokenOut.mint,
+            ),
+          ]
           : []),
         ...innerTransaction.instructions,
         ...(direction === 'sell' ? [createCloseAccountInstruction(ataIn, wallet.publicKey, wallet.publicKey)] : []),
@@ -351,7 +365,55 @@ export class Bot {
     const transaction = new VersionedTransaction(messageV0);
     transaction.sign([wallet, ...innerTransaction.signers]);
 
-    return this.txExecutor.executeAndConfirm(transaction, wallet, latestBlockhash);
+    const txResult = await this.txExecutor.executeAndConfirm(transaction, wallet, latestBlockhash, simulate);
+
+    if (txResult.confirmed) {
+      const historyDir = 'history';
+      if (!fs.existsSync(historyDir))
+        fs.mkdirSync(historyDir);
+
+      const historyFile = `${historyDir}/${this.config.wallet.publicKey.toBase58()}.json`;
+      if (!fs.existsSync(historyFile))
+        fs.writeFileSync(historyFile, '[]');
+      const history = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
+
+      if (direction === 'buy') {
+
+        const buyData = {
+          mint: tokenOut.mint.toString(),
+          buySignature: txResult.signature,
+          buyAmountIn: amountIn.toFixed(),
+          computedAmountOut: computedAmountOut.amountOut.toFixed(),
+          computedBuyPrice:  Number(amountIn.toFixed()) / Number(computedAmountOut.amountOut.toFixed()),
+          buyTime: new Date().toISOString(),
+          mintBalance: '',
+          buyPrice: '',
+        };
+
+        if (!this.config.simulateTx) {
+          const tokenAccountBalance = await this.connection.getTokenAccountBalance(ataOut);
+          const mintBalance = new TokenAmount(tokenOut, tokenAccountBalance.value.amount, true)
+          buyData.mintBalance = mintBalance.toFixed();
+          buyData.buyPrice = (Number(amountIn.toFixed()) / Number(mintBalance.toFixed())).toFixed(30);
+        }
+        
+        history.push(buyData);
+      } else {
+        const sellData = history.find((data: any) => data.mint === tokenIn.mint.toString());
+        if (sellData) {
+          sellData.sellTx = txResult.signature;
+          // sellData.sellAmountIn = amountIn.toFixed();
+          // sellData.computedAmountOut = computedAmountOut.amountOut.toFixed();
+          // sellData.sellPrice = (Number(computedAmountOut.amountOut.toFixed()) / Number(amountIn.toFixed())).toFixed(30);
+          // sellData.sellTime = new Date().toISOString();
+          // sellData.profit = new BN(sellData.sellPrice).sub(new BN(sellData.buyPrice)).toString();
+          // sellData.profitPercent = new BN(sellData.profit).mul(new BN(100)).div(new BN(sellData.buyPrice)).toString();
+          sellData.dex = `https://dexscreener.com/solana/${tokenIn.mint.toString()}?maker=${this.config.wallet.publicKey}`
+        }
+      }
+      fs.writeFileSync(`history/${this.config.wallet.publicKey.toBase58()}.json`, JSON.stringify(history, null, 4));
+    }
+    return txResult;
   }
 
   private async filterMatch(poolKeys: LiquidityPoolKeysV4) {

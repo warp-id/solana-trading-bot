@@ -54,8 +54,6 @@ export interface BotConfig {
 }
 
 export class Bot {
-  private readonly poolFilters: PoolFilters;
-
   // snipe list
   private readonly snipeListCache?: SnipeListCache;
 
@@ -75,13 +73,7 @@ export class Bot {
   ) {
     this.isWarp = txExecutor instanceof WarpTransactionExecutor;
     this.isJito = txExecutor instanceof JitoTransactionExecutor;
-
     this.semaphore = new Semaphore(config.maxTokensAtTheTime);
-    this.poolFilters = new PoolFilters(connection, {
-      quoteToken: this.config.quoteToken,
-      minPoolSize: this.config.minPoolSize,
-      maxPoolSize: this.config.maxPoolSize,
-    });
 
     if (this.config.useSnipeList) {
       this.snipeListCache = new SnipeListCache();
@@ -357,13 +349,19 @@ export class Bot {
       return true;
     }
 
+    const filters = new PoolFilters(this.connection, {
+      quoteToken: this.config.quoteToken,
+      minPoolSize: this.config.minPoolSize,
+      maxPoolSize: this.config.maxPoolSize,
+    });
+
     const timesToCheck = this.config.filterCheckDuration / this.config.filterCheckInterval;
     let timesChecked = 0;
     let matchCount = 0;
 
     do {
       try {
-        const shouldBuy = await this.poolFilters.execute(poolKeys);
+        const shouldBuy = await filters.execute(poolKeys);
 
         if (shouldBuy) {
           matchCount++;

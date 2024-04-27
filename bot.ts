@@ -57,7 +57,6 @@ export class Bot {
   // snipe list
   private readonly snipeListCache?: SnipeListCache;
 
-  // one token at the time
   private readonly semaphore: Semaphore;
   private sellExecutionCount = 0;
   private readonly stopLoss = new Map<string, TokenAmount>();

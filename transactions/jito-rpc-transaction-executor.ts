@@ -44,7 +44,7 @@ export class JitoTransactionExecutor implements TransactionExecutor {
     transaction: VersionedTransaction,
     payer: Keypair,
     latestBlockhash: BlockhashWithExpiryBlockHeight,
-  ): Promise<{ confirmed: boolean; signature?: string }> {
+  ): Promise<{ confirmed: boolean; signature?: string; error?: string }> {
     logger.debug('Starting Jito transaction execution...');
     this.JitoFeeWallet = this.getRandomValidatorKey(); // Update wallet key each execution
     logger.trace(`Selected Jito fee wallet: ${this.JitoFeeWallet.toBase58()}`);

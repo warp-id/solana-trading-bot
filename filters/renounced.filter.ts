@@ -6,6 +6,7 @@ import { logger } from '../helpers';
 
 export class RenouncedFreezeFilter implements Filter {
   private readonly errorMessage: string[] = [];
+  private cachedResult: FilterResult | undefined = undefined;
 
   constructor(
     private readonly connection: Connection,
@@ -22,6 +23,10 @@ export class RenouncedFreezeFilter implements Filter {
   }
 
   async execute(poolKeys: LiquidityPoolKeysV4): Promise<FilterResult> {
+    if (this.cachedResult) {
+      return this.cachedResult;
+    }
+
     try {
       const accountInfo = await this.connection.getAccountInfo(poolKeys.baseMint, this.connection.commitment);
       if (!accountInfo?.data) {
@@ -42,7 +47,16 @@ export class RenouncedFreezeFilter implements Filter {
         message.push('freeze');
       }
 
-      return { ok: ok, message: ok ? undefined : `RenouncedFreeze -> Creator can ${message.join(' and ')} tokens` };
+      const result = {
+        ok: ok,
+        message: ok ? undefined : `RenouncedFreeze -> Creator can ${message.join(' and ')} tokens`,
+      };
+
+      if (result.ok) {
+        this.cachedResult = result;
+      }
+
+      return result;
     } catch (e) {
       logger.error(
         { mint: poolKeys.baseMint },

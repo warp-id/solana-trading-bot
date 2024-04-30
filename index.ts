@@ -85,7 +85,7 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
 
   logger.info(`Simulate transactions: ${SIMULATE_TX}`);
   logger.info(
-    `Using ${TRANSACTION_EXECUTOR} executer: ${bot.isWarp || bot.isJito || (TRANSACTION_EXECUTOR === 'default' ? true : false)}`,
+    `Using ${TRANSACTION_EXECUTOR} executer: ${bot.isWarp || bot.isJito || bot.isTpu || (TRANSACTION_EXECUTOR === 'default' ? true : false)}`,
   );
   if (bot.isWarp || bot.isJito) {
     logger.info(`${TRANSACTION_EXECUTOR} fee: ${CUSTOM_FEE}`);

@@ -151,6 +151,7 @@ export class Bot {
             `Send buy transaction attempt: ${i + 1}/${this.config.maxBuyRetries}`,
           );
           const tokenOut = new Token(TOKEN_PROGRAM_ID, poolKeys.baseMint, poolKeys.baseDecimals);
+          console.log("detected at ", new Date().toISOString());
           const result = await this.swap(
             poolKeys,
             this.config.quoteAta,

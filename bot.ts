@@ -24,6 +24,7 @@ import BN from 'bn.js';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
 import { JitoTransactionExecutor } from './transactions/jito-rpc-transaction-executor';
 import fs from 'fs';
+import { TpuTransactionExecutor } from './transactions/tpu-transaction-executor';
 export interface BotConfig {
   wallet: Keypair;
   checkRenounced: boolean;
@@ -66,6 +67,7 @@ export class Bot {
   private sellExecutionCount = 0;
   public readonly isWarp: boolean = false;
   public readonly isJito: boolean = false;
+  public readonly isTpu: boolean = false;
 
   constructor(
     private readonly connection: Connection,
@@ -76,6 +78,7 @@ export class Bot {
   ) {
     this.isWarp = txExecutor instanceof WarpTransactionExecutor;
     this.isJito = txExecutor instanceof JitoTransactionExecutor;
+    this.isTpu = txExecutor instanceof TpuTransactionExecutor;
 
     this.mutex = new Mutex();
     this.poolFilters = new PoolFilters(connection, {

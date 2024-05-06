@@ -19,22 +19,19 @@ import { MarketCache, PoolCache, SnipeListCache } from './cache';
 import { PoolFilters } from './filters';
 import { TransactionExecutor } from './transactions';
 import { createPoolKeys, logger, NETWORK, sleep } from './helpers';
-import { Mutex } from 'async-mutex';
+import { Semaphore } from 'async-mutex';
 import BN from 'bn.js';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
 import { JitoTransactionExecutor } from './transactions/jito-rpc-transaction-executor';
 
 export interface BotConfig {
   wallet: Keypair;
-  checkRenounced: boolean;
-  checkFreezable: boolean;
-  checkBurned: boolean;
   minPoolSize: TokenAmount;
   maxPoolSize: TokenAmount;
   quoteToken: Token;
   quoteAmount: TokenAmount;
   quoteAta: PublicKey;
-  oneTokenAtATime: boolean;
+  maxTokensAtTheTime: number;
   useSnipeList: boolean;
   autoSell: boolean;
   autoBuyDelay: number;
@@ -45,6 +42,8 @@ export interface BotConfig {
   unitPrice: number;
   takeProfit: number;
   stopLoss: number;
+  trailingStopLoss: boolean;
+  skipSellingIfLostMoreThan: number;
   buySlippage: number;
   sellSlippage: number;
   priceCheckInterval: number;
@@ -55,14 +54,12 @@ export interface BotConfig {
 }
 
 export class Bot {
-  private readonly poolFilters: PoolFilters;
-
   // snipe list
   private readonly snipeListCache?: SnipeListCache;
 
-  // one token at the time
-  private readonly mutex: Mutex;
+  private readonly semaphore: Semaphore;
   private sellExecutionCount = 0;
+  private readonly stopLoss = new Map<string, TokenAmount>();
   public readonly isWarp: boolean = false;
   public readonly isJito: boolean = false;
 
@@ -75,13 +72,7 @@ export class Bot {
   ) {
     this.isWarp = txExecutor instanceof WarpTransactionExecutor;
     this.isJito = txExecutor instanceof JitoTransactionExecutor;
-
-    this.mutex = new Mutex();
-    this.poolFilters = new PoolFilters(connection, {
-      quoteToken: this.config.quoteToken,
-      minPoolSize: this.config.minPoolSize,
-      maxPoolSize: this.config.maxPoolSize,
-    });
+    this.semaphore = new Semaphore(config.maxTokensAtTheTime);
 
     if (this.config.useSnipeList) {
       this.snipeListCache = new SnipeListCache();
@@ -115,17 +106,17 @@ export class Bot {
       await sleep(this.config.autoBuyDelay);
     }
 
-    if (this.config.oneTokenAtATime) {
-      if (this.mutex.isLocked() || this.sellExecutionCount > 0) {
-        logger.debug(
-          { mint: poolState.baseMint.toString() },
-          `Skipping buy because one token at a time is turned on and token is already being processed`,
-        );
-        return;
-      }
-
-      await this.mutex.acquire();
+    const numberOfActionsBeingProcessed =
+      this.config.maxTokensAtTheTime - this.semaphore.getValue() + this.sellExecutionCount;
+    if (this.semaphore.isLocked() || numberOfActionsBeingProcessed >= this.config.maxTokensAtTheTime) {
+      logger.debug(
+        { mint: poolState.baseMint.toString() },
+        `Skipping buy because max tokens to process at the same time is ${this.config.maxTokensAtTheTime} and currently ${numberOfActionsBeingProcessed} tokens is being processed`,
+      );
+      return;
     }
+
+    await this.semaphore.acquire();
 
     try {
       const [market, mintAta] = await Promise.all([
@@ -190,16 +181,12 @@ export class Bot {
     } catch (error) {
       logger.error({ mint: poolState.baseMint.toString(), error }, `Failed to buy token`);
     } finally {
-      if (this.config.oneTokenAtATime) {
-        this.mutex.release();
-      }
+      this.semaphore.release();
     }
   }
 
   public async sell(accountId: PublicKey, rawAccount: RawAccount) {
-    if (this.config.oneTokenAtATime) {
-      this.sellExecutionCount++;
-    }
+    this.sellExecutionCount++;
 
     try {
       logger.trace({ mint: rawAccount.mint }, `Processing new token...`);
@@ -227,10 +214,14 @@ export class Bot {
       const market = await this.marketStorage.get(poolData.state.marketId.toString());
       const poolKeys: LiquidityPoolKeysV4 = createPoolKeys(new PublicKey(poolData.id), poolData.state, market);
 
-      await this.priceMatch(tokenAmountIn, poolKeys);
-
       for (let i = 0; i < this.config.maxSellRetries; i++) {
         try {
+          const shouldSell = await this.waitForSellSignal(tokenAmountIn, poolKeys);
+
+          if (!shouldSell) {
+            return;
+          }
+
           logger.info(
             { mint: rawAccount.mint },
             `Send sell transaction attempt: ${i + 1}/${this.config.maxSellRetries}`,
@@ -276,9 +267,7 @@ export class Bot {
     } catch (error) {
       logger.error({ mint: rawAccount.mint.toString(), error }, `Failed to sell token`);
     } finally {
-      if (this.config.oneTokenAtATime) {
-        this.sellExecutionCount--;
-      }
+      this.sellExecutionCount--;
     }
   }
 
@@ -359,13 +348,19 @@ export class Bot {
       return true;
     }
 
+    const filters = new PoolFilters(this.connection, {
+      quoteToken: this.config.quoteToken,
+      minPoolSize: this.config.minPoolSize,
+      maxPoolSize: this.config.maxPoolSize,
+    });
+
     const timesToCheck = this.config.filterCheckDuration / this.config.filterCheckInterval;
     let timesChecked = 0;
     let matchCount = 0;
 
     do {
       try {
-        const shouldBuy = await this.poolFilters.execute(poolKeys);
+        const shouldBuy = await filters.execute(poolKeys);
 
         if (shouldBuy) {
           matchCount++;
@@ -390,19 +385,27 @@ export class Bot {
     return false;
   }
 
-  private async priceMatch(amountIn: TokenAmount, poolKeys: LiquidityPoolKeysV4) {
+  private async waitForSellSignal(amountIn: TokenAmount, poolKeys: LiquidityPoolKeysV4) {
     if (this.config.priceCheckDuration === 0 || this.config.priceCheckInterval === 0) {
-      return;
+      return true;
     }
 
     const timesToCheck = this.config.priceCheckDuration / this.config.priceCheckInterval;
     const profitFraction = this.config.quoteAmount.mul(this.config.takeProfit).numerator.div(new BN(100));
     const profitAmount = new TokenAmount(this.config.quoteToken, profitFraction, true);
     const takeProfit = this.config.quoteAmount.add(profitAmount);
+    let stopLoss: TokenAmount;
 
-    const lossFraction = this.config.quoteAmount.mul(this.config.stopLoss).numerator.div(new BN(100));
-    const lossAmount = new TokenAmount(this.config.quoteToken, lossFraction, true);
-    const stopLoss = this.config.quoteAmount.subtract(lossAmount);
+    if (!this.stopLoss.get(poolKeys.baseMint.toString())) {
+      const lossFraction = this.config.quoteAmount.mul(this.config.stopLoss).numerator.div(new BN(100));
+      const lossAmount = new TokenAmount(this.config.quoteToken, lossFraction, true);
+      stopLoss = this.config.quoteAmount.subtract(lossAmount);
+
+      this.stopLoss.set(poolKeys.baseMint.toString(), stopLoss);
+    } else {
+      stopLoss = this.stopLoss.get(poolKeys.baseMint.toString())!;
+    }
+
     const slippage = new Percent(this.config.sellSlippage, 100);
     let timesChecked = 0;
 
@@ -419,7 +422,39 @@ export class Bot {
           amountIn: amountIn,
           currencyOut: this.config.quoteToken,
           slippage,
-        }).amountOut;
+        }).amountOut as TokenAmount;
+
+        if (this.config.trailingStopLoss) {
+          const trailingLossFraction = amountOut.mul(this.config.stopLoss).numerator.div(new BN(100));
+          const trailingLossAmount = new TokenAmount(this.config.quoteToken, trailingLossFraction, true);
+          const trailingStopLoss = amountOut.subtract(trailingLossAmount);
+
+          if (trailingStopLoss.gt(stopLoss)) {
+            logger.trace(
+              { mint: poolKeys.baseMint.toString() },
+              `Updating trailing stop loss from ${stopLoss.toFixed()} to ${trailingStopLoss.toFixed()}`,
+            );
+            this.stopLoss.set(poolKeys.baseMint.toString(), trailingStopLoss);
+            stopLoss = trailingStopLoss;
+          }
+        }
+
+        if (this.config.skipSellingIfLostMoreThan > 0) {
+          const stopSellingFraction = this.config.quoteAmount
+            .mul(this.config.skipSellingIfLostMoreThan)
+            .numerator.div(new BN(100));
+
+          const stopSellingAmount = new TokenAmount(this.config.quoteToken, stopSellingFraction, true);
+
+          if (amountOut.lt(stopSellingAmount)) {
+            logger.debug(
+              { mint: poolKeys.baseMint.toString() },
+              `Token dropped more than ${this.config.skipSellingIfLostMoreThan}%, sell stopped. Initial: ${this.config.quoteAmount.toFixed()} | Current: ${amountOut.toFixed()}`,
+            );
+            this.stopLoss.delete(poolKeys.baseMint.toString());
+            return false;
+          }
+        }
 
         logger.debug(
           { mint: poolKeys.baseMint.toString() },
@@ -427,10 +462,12 @@ export class Bot {
         );
 
         if (amountOut.lt(stopLoss)) {
+          this.stopLoss.delete(poolKeys.baseMint.toString());
           break;
         }
 
         if (amountOut.gt(takeProfit)) {
+          this.stopLoss.delete(poolKeys.baseMint.toString());
           break;
         }
 
@@ -441,5 +478,7 @@ export class Bot {
         timesChecked++;
       }
     } while (timesChecked < timesToCheck);
+
+    return true;
   }
 }

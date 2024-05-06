@@ -32,6 +32,7 @@ export const PRE_LOAD_EXISTING_MARKETS = retrieveEnvVariable('PRE_LOAD_EXISTING_
 export const CACHE_NEW_MARKETS = retrieveEnvVariable('CACHE_NEW_MARKETS', logger) === 'true';
 export const TRANSACTION_EXECUTOR = retrieveEnvVariable('TRANSACTION_EXECUTOR', logger);
 export const CUSTOM_FEE = retrieveEnvVariable('CUSTOM_FEE', logger);
+export const MAX_LAG = Number(retrieveEnvVariable('MAX_LAG', logger));
 
 // Buy
 export const AUTO_BUY_DELAY = Number(retrieveEnvVariable('AUTO_BUY_DELAY', logger));

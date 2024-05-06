@@ -48,6 +48,7 @@ import {
   CHECK_IF_SOCIALS,
   TRAILING_STOP_LOSS,
   SKIP_SELLING_IF_LOST_MORE_THAN,
+  MAX_LAG
 } from './helpers';
 import { version } from './package.json';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
@@ -96,6 +97,7 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
   logger.info(`Pre load existing markets: ${PRE_LOAD_EXISTING_MARKETS}`);
   logger.info(`Cache new markets: ${CACHE_NEW_MARKETS}`);
   logger.info(`Log level: ${LOG_LEVEL}`);
+  logger.info(`Max lag: ${MAX_LAG}`);
 
   logger.info('- Buy -');
   logger.info(`Buy amount: ${botConfig.quoteAmount.toFixed()} ${botConfig.quoteToken.name}`);
@@ -227,9 +229,19 @@ const runListener = async () => {
     const poolOpenTime = parseInt(poolState.poolOpenTime.toString());
     const exists = await poolCache.get(poolState.baseMint.toString());
 
+    let currentTimestamp = Math.floor(new Date().getTime() / 1000);
+    let lag = currentTimestamp - poolOpenTime;
+
     if (!exists && poolOpenTime > runTimestamp) {
       poolCache.save(updatedAccountInfo.accountId.toString(), poolState);
-      await bot.buy(updatedAccountInfo.accountId, poolState);
+
+      if(MAX_LAG != 0 && lag > MAX_LAG){
+        logger.trace(`Lag too high: ${lag} sec`);
+        return;
+      } else {
+        logger.trace(`Lag: ${lag} sec`);
+        await bot.buy(updatedAccountInfo.accountId, poolState);
+      }
     }
   });
 

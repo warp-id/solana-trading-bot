@@ -48,7 +48,9 @@ import {
   CHECK_IF_SOCIALS,
   TRAILING_STOP_LOSS,
   SKIP_SELLING_IF_LOST_MORE_THAN,
-  MAX_LAG
+  MAX_LAG,
+  CHECK_HOLDERS,
+  CHECK_ABNORMAL_DISTRIBUTION
 } from './helpers';
 import { version } from './package.json';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
@@ -139,6 +141,10 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
     logger.info(`Max pool size: ${botConfig.maxPoolSize.toFixed()}`);
   }
 
+  logger.info(`Check Holders: ${botConfig.checkHolders}`);    
+  logger.info(`Check Token Distribution: ${botConfig.checkTokenDistribution}`);
+  logger.info(`Check Abnormal Distribution: ${botConfig.checkAbnormalDistribution}`);
+
   logger.info('------- CONFIGURATION END -------');
 
   logger.info('Bot is running! Press CTRL + C to stop it.');
@@ -196,6 +202,9 @@ const runListener = async () => {
     filterCheckInterval: FILTER_CHECK_INTERVAL,
     filterCheckDuration: FILTER_CHECK_DURATION,
     consecutiveMatchCount: CONSECUTIVE_FILTER_MATCHES,
+    checkHolders:CHECK_HOLDERS,
+    // checkDeployer:CHECK_DEPLOYER,
+    checkAbnormalDistribution:CHECK_ABNORMAL_DISTRIBUTION,
   };
 
   const bot = new Bot(connection, marketCache, poolCache, txExecutor, botConfig);

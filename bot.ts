@@ -51,6 +51,9 @@ export interface BotConfig {
   filterCheckInterval: number;
   filterCheckDuration: number;
   consecutiveMatchCount: number;
+  checkHolders : boolean;
+  checkTokenDistribution : boolean;
+  checkAbnormalDistribution : boolean;
 }
 
 export class Bot {

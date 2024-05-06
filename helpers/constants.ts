@@ -66,3 +66,13 @@ export const MIN_POOL_SIZE = retrieveEnvVariable('MIN_POOL_SIZE', logger);
 export const MAX_POOL_SIZE = retrieveEnvVariable('MAX_POOL_SIZE', logger);
 export const USE_SNIPE_LIST = retrieveEnvVariable('USE_SNIPE_LIST', logger) === 'true';
 export const SNIPE_LIST_REFRESH_INTERVAL = Number(retrieveEnvVariable('SNIPE_LIST_REFRESH_INTERVAL', logger));
+
+//Holders filters
+export const CHECK_TOKEN_DISTRIBUTION = retrieveEnvVariable('CHECK_TOKEN_DISTRIBUTION', logger)=== 'true';
+export const TOP_HOLDER_MAX_PERCENTAGE = Number(retrieveEnvVariable('TOP_HOLDER_MAX_PERCENTAGE', logger));
+export const CHECK_ABNORMAL_DISTRIBUTION  = retrieveEnvVariable('CHECK_ABNORMAL_DISTRIBUTION', logger) === 'true';
+export const ABNORMAL_HOLDER_NR = Number(retrieveEnvVariable('ABNORMAL_HOLDER_NR', logger));
+export const CHECK_HOLDERS  = retrieveEnvVariable('CHECK_HOLDERS', logger) === 'true';
+export const TOP_10_PERCENTAGE_CHECK  = retrieveEnvVariable('TOP_10_PERCENTAGE_CHECK', logger) === 'true';
+export const TOP_10_MAX_PERCENTAGE = Number (retrieveEnvVariable('TOP_10_MAX_PERCENTAGE', logger));
+export const HOLDER_MIN_AMOUNT = Number (retrieveEnvVariable('HOLDER_MIN_AMOUNT', logger));

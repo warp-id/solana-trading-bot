@@ -441,7 +441,7 @@ export class Bot {
 
         if (this.config.skipSellingIfLostMoreThan > 0) {
           const stopSellingFraction = this.config.quoteAmount
-            .mul(this.config.skipSellingIfLostMoreThan)
+            .mul(100-this.config.skipSellingIfLostMoreThan)
             .numerator.div(new BN(100));
 
           const stopSellingAmount = new TokenAmount(this.config.quoteToken, stopSellingFraction, true);

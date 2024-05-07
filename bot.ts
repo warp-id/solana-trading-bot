@@ -51,9 +51,9 @@ export interface BotConfig {
   filterCheckInterval: number;
   filterCheckDuration: number;
   consecutiveMatchCount: number;
-  checkHolders : boolean;
-  checkTokenDistribution : boolean;
-  checkAbnormalDistribution : boolean;
+  checkHolders: boolean;
+  checkTokenDistribution: boolean;
+  checkAbnormalDistribution: boolean;
 }
 
 export class Bot {
@@ -137,8 +137,15 @@ export class Bot {
         }
       }
 
+      const startTime = Date.now();
       for (let i = 0; i < this.config.maxBuyRetries; i++) {
         try {
+
+          if ((Date.now() - startTime) > 10000) {
+            logger.info(`Not buying mint ${poolState.baseMint.toString()}, max buy 10 sec timer exceeded!`);
+            return;
+          }
+
           logger.info(
             { mint: poolState.baseMint.toString() },
             `Send buy transaction attempt: ${i + 1}/${this.config.maxBuyRetries}`,
@@ -219,10 +226,12 @@ export class Bot {
 
       for (let i = 0; i < this.config.maxSellRetries; i++) {
         try {
-          const shouldSell = await this.waitForSellSignal(tokenAmountIn, poolKeys);
+          if (i < 1) { // Only check for sell signal on first attempt, not on retries
+            const shouldSell = await this.waitForSellSignal(tokenAmountIn, poolKeys);
 
-          if (!shouldSell) {
-            return;
+            if (!shouldSell) {
+              return;
+            }
           }
 
           logger.info(
@@ -322,18 +331,18 @@ export class Bot {
         ...(this.isWarp || this.isJito
           ? []
           : [
-              ComputeBudgetProgram.setComputeUnitPrice({ microLamports: this.config.unitPrice }),
-              ComputeBudgetProgram.setComputeUnitLimit({ units: this.config.unitLimit }),
-            ]),
+            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: this.config.unitPrice }),
+            ComputeBudgetProgram.setComputeUnitLimit({ units: this.config.unitLimit }),
+          ]),
         ...(direction === 'buy'
           ? [
-              createAssociatedTokenAccountIdempotentInstruction(
-                wallet.publicKey,
-                ataOut,
-                wallet.publicKey,
-                tokenOut.mint,
-              ),
-            ]
+            createAssociatedTokenAccountIdempotentInstruction(
+              wallet.publicKey,
+              ataOut,
+              wallet.publicKey,
+              tokenOut.mint,
+            ),
+          ]
           : []),
         ...innerTransaction.instructions,
         ...(direction === 'sell' ? [createCloseAccountInstruction(ataIn, wallet.publicKey, wallet.publicKey)] : []),
@@ -444,13 +453,13 @@ export class Bot {
 
         if (this.config.skipSellingIfLostMoreThan > 0) {
           const stopSellingFraction = this.config.quoteAmount
-            .mul(100-this.config.skipSellingIfLostMoreThan)
+            .mul(100 - this.config.skipSellingIfLostMoreThan)
             .numerator.div(new BN(100));
 
           const stopSellingAmount = new TokenAmount(this.config.quoteToken, stopSellingFraction, true);
 
           if (amountOut.lt(stopSellingAmount)) {
-            logger.debug(
+            logger.info(
               { mint: poolKeys.baseMint.toString() },
               `Token dropped more than ${this.config.skipSellingIfLostMoreThan}%, sell stopped. Initial: ${this.config.quoteAmount.toFixed()} | Current: ${amountOut.toFixed()}`,
             );
@@ -461,7 +470,7 @@ export class Bot {
 
         logger.debug(
           { mint: poolKeys.baseMint.toString() },
-          `Take profit: ${takeProfit.toFixed()} | Stop loss: ${stopLoss.toFixed()} | Current: ${amountOut.toFixed()}`,
+          `${timesChecked}/${timesToCheck} Take profit: ${takeProfit.toFixed()} | Stop loss: ${stopLoss.toFixed()} | Current: ${amountOut.toFixed()}`,
         );
 
         if (amountOut.lt(stopLoss)) {

@@ -50,7 +50,8 @@ import {
   SKIP_SELLING_IF_LOST_MORE_THAN,
   MAX_LAG,
   CHECK_HOLDERS,
-  CHECK_ABNORMAL_DISTRIBUTION
+  CHECK_ABNORMAL_DISTRIBUTION,
+  CHECK_TOKEN_DISTRIBUTION
 } from './helpers';
 import { version } from './package.json';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
@@ -203,7 +204,7 @@ const runListener = async () => {
     filterCheckDuration: FILTER_CHECK_DURATION,
     consecutiveMatchCount: CONSECUTIVE_FILTER_MATCHES,
     checkHolders:CHECK_HOLDERS,
-    // checkDeployer:CHECK_DEPLOYER,
+    checkTokenDistribution:CHECK_TOKEN_DISTRIBUTION,
     checkAbnormalDistribution:CHECK_ABNORMAL_DISTRIBUTION,
   };
 
@@ -243,7 +244,7 @@ const runListener = async () => {
 
     if (!exists && poolOpenTime > runTimestamp) {
       poolCache.save(updatedAccountInfo.accountId.toString(), poolState);
-
+      
       if(MAX_LAG != 0 && lag > MAX_LAG){
         logger.trace(`Lag too high: ${lag} sec`);
         return;

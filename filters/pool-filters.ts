@@ -15,6 +15,7 @@ import {
   CHECK_HOLDERS,
   logger } from '../helpers';
 import { HoldersCountFilter, TopHolderDistributionFilter } from './holders';
+import { BlacklistFilter } from './blacklist.filter';
 
 export interface Filter {
   execute(poolKeysV4: LiquidityPoolKeysV4): Promise<FilterResult>;
@@ -38,6 +39,7 @@ export class PoolFilters {
     readonly connection: Connection,
     readonly args: PoolFilterArgs,
   ) {
+
     if(CHECK_HOLDERS){
       this.filters.push(new HoldersCountFilter(connection));
     }
@@ -57,6 +59,9 @@ export class PoolFilters {
     if (CHECK_IF_MUTABLE || CHECK_IF_SOCIALS) {
       this.filters.push(new MutableFilter(connection, getMetadataAccountDataSerializer(), CHECK_IF_MUTABLE, CHECK_IF_SOCIALS));
     }
+
+    // not optional
+    this.filters.push(new BlacklistFilter(connection, getMetadataAccountDataSerializer()));
 
     if (!args.minPoolSize.isZero() || !args.maxPoolSize.isZero()) {
       this.filters.push(new PoolSizeFilter(connection, args.quoteToken, args.minPoolSize, args.maxPoolSize));

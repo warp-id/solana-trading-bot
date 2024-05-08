@@ -88,7 +88,7 @@ export class TopHolderDistributionFilter implements Filter {
                 message += `.\nWarning: Top holders are poor, total net worth: ${distributionResult.topHoldersTotalSol.toFixed(3)}.`;
             }
 
-            const distributionOk = !distributionResult.isTopHolderExcessive && (!TOP_10_PERCENTAGE_CHECK || !distributionResult.isTopTenPercentageExcessive);
+            const distributionOk = !distributionResult.isTopHolderExcessive && !distributionResult.isTopHoldersPoor && (!TOP_10_PERCENTAGE_CHECK || !distributionResult.isTopTenPercentageExcessive);
 
             if (CHECK_ABNORMAL_DISTRIBUTION) {
                 const abnormalDistribution = this.checkForAbnormalDistribution(largestAccounts);

@@ -41,6 +41,7 @@ interface HolderInfo {
     address: PublicKey;
     uiAmount: number;
     owner: PublicKey;
+    lamports: number;
 }
 
 export class TopHolderDistributionFilter implements Filter {
@@ -63,13 +64,15 @@ export class TopHolderDistributionFilter implements Filter {
 
             // Fetch additional account details for each of the largest accounts
             const accountInfos = await this.connection.getMultipleAccountsInfo(addresses, { commitment: 'confirmed' });
+
             const largestAccounts = accountInfos.map((info, index) => ({
                 address: addresses[index],
                 uiAmount: largestAccountsResponse.value[index].uiAmount ?? 0,
-                owner: info ? new PublicKey(info.data.slice(32, 64)) : new PublicKey('11111111111111111111111111111111') // Use a default or null-like public key
+                owner: info ? new PublicKey(info.data.slice(32, 64)) : new PublicKey('11111111111111111111111111111111'), // Use a default or null-like public key
+                lamports: info ? info.lamports : 0
             }));
 
-            const distributionResult = this.checkTokenDistribution(largestAccounts);
+            const distributionResult = await this.checkTokenDistribution(largestAccounts);
             let message = `Total Supply: ${totalSupply}, \nTop holder percentages: ${distributionResult.percentages.join(' | ')}`;
 
             if (distributionResult.isTopHolderExcessive) {
@@ -78,6 +81,11 @@ export class TopHolderDistributionFilter implements Filter {
 
             if (TOP_10_PERCENTAGE_CHECK && distributionResult.isTopTenPercentageExcessive) {
                 message += `\nWarning: Top ten holders collectively exceed threshold of ${TOP_10_MAX_PERCENTAGE}% with ${distributionResult.topTenPercentage.toFixed(2)}%.`;
+            }
+
+            logger.trace(`Top holders total SOL: ${distributionResult.topHoldersTotalSol}`);
+            if (distributionResult.isTopHoldersPoor) {
+                message += `.\nWarning: Top holders are poor, total net worth: ${distributionResult.topHoldersTotalSol.toFixed(3)}.`;
             }
 
             const distributionOk = !distributionResult.isTopHolderExcessive && (!TOP_10_PERCENTAGE_CHECK || !distributionResult.isTopTenPercentageExcessive);
@@ -101,7 +109,7 @@ export class TopHolderDistributionFilter implements Filter {
         }
     }
 
-    private checkTokenDistribution(accounts: HolderInfo[]): { percentages: string[], totalSupply: number, topTenPercentage: number, isTopTenPercentageExcessive: boolean, isTopHolderExcessive: boolean } {
+    private async checkTokenDistribution(accounts: HolderInfo[]): Promise<{ percentages: string[], totalSupply: number, topTenPercentage: number, isTopTenPercentageExcessive: boolean, isTopHolderExcessive: boolean, isTopHoldersPoor: boolean, topHoldersTotalSol: number }> {
         const totalSupply = accounts.reduce((sum, account) => sum + account.uiAmount, 0);
         const excludeAddress = new PublicKey("5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1");
         const filteredAccounts = accounts.filter(account => !account.owner.equals(excludeAddress));
@@ -111,8 +119,15 @@ export class TopHolderDistributionFilter implements Filter {
         const isTopHolderExcessive = parseFloat(percentages[0]) > TOP_HOLDER_MAX_PERCENTAGE;
         const topTenPercentage = percentagesRaw.reduce((sum, current) => sum + current, 0);
         const isTopTenPercentageExcessive = topTenPercentage > TOP_10_MAX_PERCENTAGE;
+       
+        const ownerAddresses = filteredAccounts.map(x=>x.owner);
+        const ownerAccounts = await this.connection.getMultipleAccountsInfo(ownerAddresses, { commitment: 'confirmed' });
 
-        return { percentages, totalSupply, topTenPercentage, isTopTenPercentageExcessive, isTopHolderExcessive };
+        const lessThanThresholdAccounts = ownerAccounts.filter(account => account && account.lamports < 1000000000).length;
+        const isTopHoldersPoor = lessThanThresholdAccounts > (ownerAccounts.length / 2);
+        const topHoldersTotalSol = ownerAccounts.filter(x=>x).reduce((sum, account) => sum + (account.lamports / 1000000000), 0);
+
+        return { percentages, totalSupply, topTenPercentage, isTopTenPercentageExcessive, isTopHolderExcessive, isTopHoldersPoor, topHoldersTotalSol };
     }
 
     private checkForAbnormalDistribution(accounts: HolderInfo[]): boolean {

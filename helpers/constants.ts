@@ -76,3 +76,7 @@ export const CHECK_HOLDERS  = retrieveEnvVariable('CHECK_HOLDERS', logger) === '
 export const TOP_10_PERCENTAGE_CHECK  = retrieveEnvVariable('TOP_10_PERCENTAGE_CHECK', logger) === 'true';
 export const TOP_10_MAX_PERCENTAGE = Number (retrieveEnvVariable('TOP_10_MAX_PERCENTAGE', logger));
 export const HOLDER_MIN_AMOUNT = Number (retrieveEnvVariable('HOLDER_MIN_AMOUNT', logger));
+
+//Telegram config
+export const TELEGRAM_BOT_TOKEN = retrieveEnvVariable('TELEGRAM_BOT_TOKEN', logger);
+export const TELEGRAM_CHAT_ID = Number (retrieveEnvVariable('TELEGRAM_CHAT_ID', logger));

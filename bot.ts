@@ -23,6 +23,8 @@ import { Semaphore } from 'async-mutex';
 import BN from 'bn.js';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
 import { JitoTransactionExecutor } from './transactions/jito-rpc-transaction-executor';
+import { Context, Telegraf } from 'telegraf';
+import { InlineKeyboardMarkup, Message, Update } from 'telegraf/typings/core/types/typegram';
 
 export interface BotConfig {
   wallet: Keypair;
@@ -54,6 +56,7 @@ export interface BotConfig {
   checkHolders: boolean;
   checkTokenDistribution: boolean;
   checkAbnormalDistribution: boolean;
+  telegramChatId: number;
 }
 
 export class Bot {
@@ -65,6 +68,7 @@ export class Bot {
   private readonly stopLoss = new Map<string, TokenAmount>();
   public readonly isWarp: boolean = false;
   public readonly isJito: boolean = false;
+  private readonly tg_bot: Telegraf<Context<Update>>;
 
   constructor(
     private readonly connection: Connection,
@@ -72,10 +76,12 @@ export class Bot {
     private readonly poolStorage: PoolCache,
     private readonly txExecutor: TransactionExecutor,
     readonly config: BotConfig,
+    private readonly _tg_bot: Telegraf<Context<Update>>
   ) {
     this.isWarp = txExecutor instanceof WarpTransactionExecutor;
     this.isJito = txExecutor instanceof JitoTransactionExecutor;
     this.semaphore = new Semaphore(config.maxTokensAtTheTime);
+    this.tg_bot = _tg_bot;
 
     if (this.config.useSnipeList) {
       this.snipeListCache = new SnipeListCache();
@@ -173,6 +179,8 @@ export class Bot {
               `Confirmed buy tx`,
             );
 
+            this.sendTelegramMessage(`💚Confirmed buy💚\n\nMint <code>${poolKeys.baseMint.toString()}</code>\nSignature <code>${result.signature}</code>`, poolState.baseMint.toString())
+
             break;
           }
 
@@ -261,6 +269,8 @@ export class Bot {
               },
               `Confirmed sell tx`,
             );
+            this.sendTelegramMessage(`⭕esolde?⭕\n\nMint <code>${rawAccount.mint.toString()}</code>\nRetries <code>${i + 1}/${this.config.maxSellRetries}</code>`, rawAccount.mint.toString())
+
             break;
           }
 
@@ -420,6 +430,7 @@ export class Bot {
 
     const slippage = new Percent(this.config.sellSlippage, 100);
     let timesChecked = 0;
+    let telegram_status_message_id: number | undefined = undefined;
 
     do {
       try {
@@ -463,6 +474,9 @@ export class Bot {
               { mint: poolKeys.baseMint.toString() },
               `Token dropped more than ${this.config.skipSellingIfLostMoreThan}%, sell stopped. Initial: ${this.config.quoteAmount.toFixed()} | Current: ${amountOut.toFixed()}`,
             );
+
+            this.sendTelegramMessage(`🚨RUG RUG RUG🚨\n\nMint <code>${poolKeys.baseMint.toString()}</code>\nToken dropped more than ${this.config.skipSellingIfLostMoreThan}%, sell stopped\nInitial: <code>${this.config.quoteAmount.toFixed()}</code>\nCurrent: <code>${amountOut.toFixed()}</code>`, poolKeys.baseMint.toString())
+
             this.stopLoss.delete(poolKeys.baseMint.toString());
             return false;
           }
@@ -472,6 +486,15 @@ export class Bot {
           { mint: poolKeys.baseMint.toString() },
           `${timesChecked}/${timesToCheck} Take profit: ${takeProfit.toFixed()} | Stop loss: ${stopLoss.toFixed()} | Current: ${amountOut.toFixed()}`,
         );
+
+        if (timesChecked % 10 === 0 && timesChecked !== 0) {
+          this.sendTelegramMessage(`❕Status update❕\n\n<code>${poolKeys.baseMint.toString()}</code>\n\nTake profit: <code>${takeProfit.toFixed()}</code>\nStop loss: <code>${stopLoss.toFixed()}</code>\nCurrent: <code>${amountOut.toFixed()}</code>\n\n${timesChecked}/${timesToCheck}`, poolKeys.baseMint.toString(), telegram_status_message_id)
+          .then(x=> {
+            if(x){
+              telegram_status_message_id = x.message_id;
+            }
+          });
+        }
 
         if (amountOut.lt(stopLoss)) {
           this.stopLoss.delete(poolKeys.baseMint.toString());
@@ -493,4 +516,30 @@ export class Bot {
 
     return true;
   }
+
+  private async sendTelegramMessage(message: string, mint: string, messageId?: number) : Promise<Message.TextMessage | undefined> {
+
+    let kb: InlineKeyboardMarkup =  {
+      inline_keyboard: [
+        [
+          { text: '🍔Dexscreener', url: `https://dexscreener.com/solana/${mint}?maker=${this.config.wallet.publicKey}` },
+          { text: 'Rugcheck🔍', url: `https://rugcheck.xyz/tokens/${mint}` }
+        ]
+      ]
+    };
+
+    if(messageId){
+      this.tg_bot.telegram.editMessageText(this.config.telegramChatId, messageId, undefined, message, {
+        parse_mode: "HTML", reply_markup: kb
+      });
+      return undefined;
+
+    } else {
+      return await this.tg_bot.telegram.sendMessage(this.config.telegramChatId, message, {
+        parse_mode: "HTML", reply_markup: kb
+      });
+    }
+    
+  }
 }
+

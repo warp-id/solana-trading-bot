@@ -17,11 +17,11 @@
     "bn.js": "^5.2.1",
     "bs58": "^5.0.0",
     "dotenv": "^16.4.1",
-    "node-telegram-bot-api": "^0.65.1",
     "npm": "^10.5.2",
     "pino": "^8.18.0",
     "pino-pretty": "^10.3.1",
-    "pino-std-serializers": "^6.2.2"
+    "pino-std-serializers": "^6.2.2",
+    "telegraf": "^4.16.3"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.5",

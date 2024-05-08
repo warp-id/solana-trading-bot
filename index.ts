@@ -51,11 +51,14 @@ import {
   MAX_LAG,
   CHECK_HOLDERS,
   CHECK_ABNORMAL_DISTRIBUTION,
-  CHECK_TOKEN_DISTRIBUTION
+  CHECK_TOKEN_DISTRIBUTION,
+  TELEGRAM_BOT_TOKEN,
+  TELEGRAM_CHAT_ID
 } from './helpers';
 import { version } from './package.json';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
 import { JitoTransactionExecutor } from './transactions/jito-rpc-transaction-executor';
+import { Telegraf } from 'telegraf';
 
 const connection = new Connection(RPC_ENDPOINT, {
   wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
@@ -155,6 +158,9 @@ const runListener = async () => {
   logger.level = LOG_LEVEL;
   logger.info('Bot is starting...');
 
+  const tg_bot = new Telegraf(TELEGRAM_BOT_TOKEN);
+
+
   const marketCache = new MarketCache(connection);
   const poolCache = new PoolCache();
   let txExecutor: TransactionExecutor;
@@ -206,9 +212,10 @@ const runListener = async () => {
     checkHolders:CHECK_HOLDERS,
     checkTokenDistribution:CHECK_TOKEN_DISTRIBUTION,
     checkAbnormalDistribution:CHECK_ABNORMAL_DISTRIBUTION,
+    telegramChatId:TELEGRAM_CHAT_ID
   };
 
-  const bot = new Bot(connection, marketCache, poolCache, txExecutor, botConfig);
+  const bot = new Bot(connection, marketCache, poolCache, txExecutor, botConfig, tg_bot);
   const valid = await bot.validate();
 
   if (!valid) {

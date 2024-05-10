@@ -9,7 +9,7 @@ import { TransactionExecutor } from './transaction-executor.interface';
 import { logger } from '../helpers';
 
 export class DefaultTransactionExecutor implements TransactionExecutor {
-  constructor(private readonly connection: Connection) {}
+  constructor(private readonly connection: Connection) { }
 
   public async executeAndConfirm(
     transaction: VersionedTransaction,

@@ -83,12 +83,18 @@ export class TopHolderDistributionFilter implements Filter {
                 message += `\nWarning: Top ten holders collectively exceed threshold of ${TOP_10_MAX_PERCENTAGE}% with ${distributionResult.topTenPercentage.toFixed(2)}%.`;
             }
 
-            logger.trace(`Top holders total SOL: ${distributionResult.topHoldersTotalSol}`);
+            // logger.trace(`Top holders total SOL: ${distributionResult.topHoldersTotalSol}`);
             if (distributionResult.isTopHoldersPoor) {
                 message += `.\nWarning: Top holders are poor, total net worth: ${distributionResult.topHoldersTotalSol.toFixed(3)}.`;
             }
 
-            const distributionOk = !distributionResult.isTopHolderExcessive && !distributionResult.isTopHoldersPoor && (!TOP_10_PERCENTAGE_CHECK || !distributionResult.isTopTenPercentageExcessive);
+            if (distributionResult.topWalletIsNotPool) {
+                message += `.\nWarning: Top wallet is not the pool wallet.`;
+            }
+
+            const distributionOk = !distributionResult.isTopHolderExcessive &&
+             !distributionResult.isTopHoldersPoor && !distributionResult.topWalletIsNotPool &&
+             (!TOP_10_PERCENTAGE_CHECK || !distributionResult.isTopTenPercentageExcessive);
 
             if (CHECK_ABNORMAL_DISTRIBUTION) {
                 const abnormalDistribution = this.checkForAbnormalDistribution(largestAccounts);
@@ -109,9 +115,22 @@ export class TopHolderDistributionFilter implements Filter {
         }
     }
 
-    private async checkTokenDistribution(accounts: HolderInfo[]): Promise<{ percentages: string[], totalSupply: number, topTenPercentage: number, isTopTenPercentageExcessive: boolean, isTopHolderExcessive: boolean, isTopHoldersPoor: boolean, topHoldersTotalSol: number }> {
+    private async checkTokenDistribution(accounts: HolderInfo[]): Promise<{
+            percentages: string[],
+            totalSupply: number,
+            topTenPercentage: number,
+            isTopTenPercentageExcessive: boolean,
+            isTopHolderExcessive: boolean,
+            isTopHoldersPoor: boolean,
+            topHoldersTotalSol: number,
+            topWalletIsNotPool: boolean
+        }> {
+
         const totalSupply = accounts.reduce((sum, account) => sum + account.uiAmount, 0);
         const excludeAddress = new PublicKey("5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1");
+
+        const topWalletIsNotPool = accounts.findIndex(account => account.owner.equals(excludeAddress)) != 0;
+
         const filteredAccounts = accounts.filter(account => !account.owner.equals(excludeAddress));
 
         const percentages = filteredAccounts.slice(0, 10).map(account => ((account.uiAmount / totalSupply) * 100).toFixed(2) + '%');
@@ -119,15 +138,26 @@ export class TopHolderDistributionFilter implements Filter {
         const isTopHolderExcessive = parseFloat(percentages[0]) > TOP_HOLDER_MAX_PERCENTAGE;
         const topTenPercentage = percentagesRaw.reduce((sum, current) => sum + current, 0);
         const isTopTenPercentageExcessive = topTenPercentage > TOP_10_MAX_PERCENTAGE;
-       
-        const ownerAddresses = filteredAccounts.map(x=>x.owner);
+
+        const ownerAddresses = filteredAccounts.map(x => x.owner);
         const ownerAccounts = await this.connection.getMultipleAccountsInfo(ownerAddresses, { commitment: 'confirmed' });
 
         const lessThanThresholdAccounts = ownerAccounts.filter(account => account && account.lamports < 1000000000).length;
         const isTopHoldersPoor = lessThanThresholdAccounts > (ownerAccounts.length / 2);
-        const topHoldersTotalSol = ownerAccounts.filter(x=>x).reduce((sum, account) => sum + (account.lamports / 1000000000), 0);
+        const topHoldersTotalSol = ownerAccounts.filter(x => x).reduce((sum, account) => sum + (account.lamports / 1000000000), 0);
 
-        return { percentages, totalSupply, topTenPercentage, isTopTenPercentageExcessive, isTopHolderExcessive, isTopHoldersPoor, topHoldersTotalSol };
+
+
+        return {
+            percentages, 
+            totalSupply,
+            topTenPercentage, 
+            isTopTenPercentageExcessive,
+            isTopHolderExcessive, 
+            isTopHoldersPoor,
+            topHoldersTotalSol, 
+            topWalletIsNotPool
+        };
     }
 
     private checkForAbnormalDistribution(accounts: HolderInfo[]): boolean {

@@ -25,6 +25,8 @@ import { WarpTransactionExecutor } from './transactions/warp-transaction-executo
 import { JitoTransactionExecutor } from './transactions/jito-rpc-transaction-executor';
 import { Context, Telegraf } from 'telegraf';
 import { InlineKeyboardMarkup, Message, Update } from 'telegraf/typings/core/types/typegram';
+import { SqueezeListCache } from './cache/squeeze-list.cache';
+import { getMetadataAccountDataSerializer } from '@metaplex-foundation/mpl-token-metadata';
 
 export interface BotConfig {
   wallet: Keypair;
@@ -83,6 +85,10 @@ export class Bot {
     this.semaphore = new Semaphore(config.maxTokensAtTheTime);
     this.tg_bot = _tg_bot;
 
+    // this.tg_bot.on("message", async (ctx) => {
+      
+    // });
+
     if (this.config.useSnipeList) {
       this.snipeListCache = new SnipeListCache();
       this.snipeListCache.init();
@@ -102,7 +108,7 @@ export class Bot {
     return true;
   }
 
-  public async buy(accountId: PublicKey, poolState: LiquidityStateV4) {
+  public async buy(accountId: PublicKey, poolState: LiquidityStateV4, lag: number = 0) {
     logger.trace({ mint: poolState.baseMint }, `Processing new pool...`);
 
     if (this.config.useSnipeList && !this.snipeListCache?.isInList(poolState.baseMint.toString())) {
@@ -111,8 +117,8 @@ export class Bot {
     }
 
     if (this.config.autoBuyDelay > 0) {
-      logger.debug({ mint: poolState.baseMint }, `Waiting for ${this.config.autoBuyDelay} ms before buy`);
-      await sleep(this.config.autoBuyDelay);
+      logger.debug({ mint: poolState.baseMint }, `Waiting for ${this.config.autoBuyDelay} ms before buy`); //  - (lag * 1000)
+      await sleep(this.config.autoBuyDelay); //  - (lag * 1000)
     }
 
     const numberOfActionsBeingProcessed =
@@ -260,6 +266,40 @@ export class Bot {
           );
 
           if (result.confirmed) {
+            let profitOrLoss = 0;
+
+            try {
+              this.connection.getParsedTransaction(result.signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 })
+              .then((parsedConfirmedTransaction) => {
+                  if (parsedConfirmedTransaction) {
+                      let preTokenBalances = parsedConfirmedTransaction.meta.preTokenBalances;
+                      let postTokenBalances = parsedConfirmedTransaction.meta.postTokenBalances;
+          
+                      // Filter for WSOL mint and your public key
+                      let pre = preTokenBalances
+                          .filter(x => x.mint === this.config.quoteToken.mint.toString() && x.owner === this.config.wallet.publicKey.toString())
+                          .map(x => x.uiTokenAmount.uiAmount)
+                          .reduce((a, b) => a + b, 0); // Sum the pre values
+          
+                      let post = postTokenBalances
+                          .filter(x => x.mint === this.config.quoteToken.mint.toString() && x.owner ===  this.config.wallet.publicKey.toString())
+                          .map(x => x.uiTokenAmount.uiAmount)
+                          .reduce((a, b) => a + b, 0); // Sum the post values
+          
+                      profitOrLoss = (post - pre) - parseFloat(this.config.quoteAmount.toFixed());
+
+                      this.sendTelegramMessage(`⭕Confirmed sale at <b>${(post - pre).toFixed(5)}</b>⭕\n\n${profitOrLoss < 0 ? "🔴Loss👎 " : "🟢Profit👍 "}<code>${profitOrLoss.toFixed(5)}</code>\n\nRetries <code>${i + 1}/${this.config.maxSellRetries}</code>`, rawAccount.mint.toString());
+                      console.log('Profit or Loss:', profitOrLoss);
+                  }
+              })
+              .catch((error) => {
+                  console.log('Error fetching transaction details:', error);
+              });
+
+             
+            } catch (error) {
+              console.log("Error calculating profit", error);
+            }
             logger.info(
               {
                 dex: `https://dexscreener.com/solana/${rawAccount.mint.toString()}?maker=${this.config.wallet.publicKey}`,
@@ -269,8 +309,6 @@ export class Bot {
               },
               `Confirmed sell tx`,
             );
-            this.sendTelegramMessage(`⭕esolde?⭕\n\nMint <code>${rawAccount.mint.toString()}</code>\nRetries <code>${i + 1}/${this.config.maxSellRetries}</code>`, rawAccount.mint.toString())
-
             break;
           }
 
@@ -430,7 +468,7 @@ export class Bot {
 
     const slippage = new Percent(this.config.sellSlippage, 100);
     let timesChecked = 0;
-    let telegram_status_message_id: number | undefined = undefined;
+    //let telegram_status_message_id: number | undefined = undefined;
 
     do {
       try {
@@ -487,22 +525,34 @@ export class Bot {
           `${timesChecked}/${timesToCheck} Take profit: ${takeProfit.toFixed()} | Stop loss: ${stopLoss.toFixed()} | Current: ${amountOut.toFixed()}`,
         );
 
-        if (timesChecked % 10 === 0 && timesChecked !== 0) {
-          this.sendTelegramMessage(`❕Status update❕\n\n<code>${poolKeys.baseMint.toString()}</code>\n\nTake profit: <code>${takeProfit.toFixed()}</code>\nStop loss: <code>${stopLoss.toFixed()}</code>\nCurrent: <code>${amountOut.toFixed()}</code>\n\n${timesChecked}/${timesToCheck}`, poolKeys.baseMint.toString(), telegram_status_message_id)
-          .then(x=> {
-            if(x){
-              telegram_status_message_id = x.message_id;
-            }
-          });
-        }
+        // if (timesChecked % 10 === 0 && timesChecked !== 0) {
+        //   this.sendTelegramMessage(`❕Status update❕\n\n<code>${poolKeys.baseMint.toString()}</code>\n\nTake profit: <code>${takeProfit.toFixed()}</code>\nStop loss: <code>${stopLoss.toFixed()}</code>\nCurrent: <code>${amountOut.toFixed()}</code>\n\n${timesChecked}/${timesToCheck}`, poolKeys.baseMint.toString(), telegram_status_message_id)
+        //     .then(x => {
+        //       if (x) {
+        //         telegram_status_message_id = x.message_id;
+        //       }
+        //     });
+        // }
 
         if (amountOut.lt(stopLoss)) {
           this.stopLoss.delete(poolKeys.baseMint.toString());
+          // this.sendTelegramMessage(`😡STOP LOSS😡\n\n<code>${poolKeys.baseMint.toString()}</code>\n\nTake profit: <code>${takeProfit.toFixed()}</code>\nStop loss: <code>${stopLoss.toFixed()}</code>\nCurrent: <code>${amountOut.toFixed()}</code>\n\n${timesChecked}/${timesToCheck}`, poolKeys.baseMint.toString(), telegram_status_message_id)
+          //   .then(x => {
+          //     if (x) {
+          //       telegram_status_message_id = x.message_id;
+          //     }
+          //   });
           break;
         }
 
         if (amountOut.gt(takeProfit)) {
           this.stopLoss.delete(poolKeys.baseMint.toString());
+          // this.sendTelegramMessage(`😸TAKE PROFIT😸\n\n<code>${poolKeys.baseMint.toString()}</code>\n\nTake profit: <code>${takeProfit.toFixed()}</code>\nStop loss: <code>${stopLoss.toFixed()}</code>\nCurrent: <code>${amountOut.toFixed()}</code>\n\n${timesChecked}/${timesToCheck}`, poolKeys.baseMint.toString(), telegram_status_message_id)
+          //   .then(x => {
+          //     if (x) {
+          //       telegram_status_message_id = x.message_id;
+          //     }
+          //   });
           break;
         }
 
@@ -517,29 +567,33 @@ export class Bot {
     return true;
   }
 
-  private async sendTelegramMessage(message: string, mint: string, messageId?: number) : Promise<Message.TextMessage | undefined> {
-
-    let kb: InlineKeyboardMarkup =  {
-      inline_keyboard: [
-        [
-          { text: '🍔Dexscreener', url: `https://dexscreener.com/solana/${mint}?maker=${this.config.wallet.publicKey}` },
-          { text: 'Rugcheck🔍', url: `https://rugcheck.xyz/tokens/${mint}` }
+  private async sendTelegramMessage(message: string, mint: string, messageId?: number): Promise<Message.TextMessage | undefined> {
+    try {
+      let kb: InlineKeyboardMarkup = {
+        inline_keyboard: [
+          [
+            { text: '🍔Dexscreener', url: `https://dexscreener.com/solana/${mint}?maker=${this.config.wallet.publicKey}` },
+            { text: 'Rugcheck🔍', url: `https://rugcheck.xyz/tokens/${mint}` }
+          ]
         ]
-      ]
-    };
+      };
 
-    if(messageId){
-      this.tg_bot.telegram.editMessageText(this.config.telegramChatId, messageId, undefined, message, {
-        parse_mode: "HTML", reply_markup: kb
-      });
-      return undefined;
+      if (messageId) {
+        this.tg_bot.telegram.editMessageText(this.config.telegramChatId, messageId, undefined, message, {
+          parse_mode: "HTML", reply_markup: kb
+        });
+        return undefined;
 
-    } else {
-      return await this.tg_bot.telegram.sendMessage(this.config.telegramChatId, message, {
-        parse_mode: "HTML", reply_markup: kb
-      });
+      } else {
+        return await this.tg_bot.telegram.sendMessage(this.config.telegramChatId, message, {
+          parse_mode: "HTML", reply_markup: kb
+        });
+      }
+
     }
-    
+    catch (e) {
+      return undefined;
+    }
   }
 }
 

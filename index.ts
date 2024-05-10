@@ -257,7 +257,7 @@ const runListener = async () => {
         return;
       } else {
         logger.trace(`Lag: ${lag} sec`);
-        await bot.buy(updatedAccountInfo.accountId, poolState);
+        await bot.buy(updatedAccountInfo.accountId, poolState, lag);
       }
     }
   });

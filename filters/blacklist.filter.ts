@@ -16,7 +16,10 @@ export class BlacklistFilter implements Filter {
   async execute(poolKeys: LiquidityPoolKeysV4): Promise<FilterResult> {
     try {
 
-      let blacklist = ["8N57pYk1SoHkBZcPMhyJMJCLLfEyHMq3SqYn63W9RoVG"];
+      let blacklist = [
+        "8N57pYk1SoHkBZcPMhyJMJCLLfEyHMq3SqYn63W9RoVG",
+        "GH8GPjSX9XNvxsVaJHg9KfEXVovqtiY5pyhu8vYrwjTb"
+      ];
 
       const metadataPDA = getPdaMetadataKey(poolKeys.baseMint);
       const metadataAccount = await this.connection.getAccountInfo(metadataPDA.publicKey, this.connection.commitment);
@@ -24,7 +27,7 @@ export class BlacklistFilter implements Filter {
       if (!metadataAccount?.data) {
         return { ok: false, message: 'Blacklist -> Failed to fetch account data' };
       }
-      
+
       const deserialize = this.metadataSerializer.deserialize(metadataAccount.data);
 
       if (blacklist.includes(deserialize[0].updateAuthority.toString())) {
@@ -39,7 +42,7 @@ export class BlacklistFilter implements Filter {
 
     return {
       ok: false,
-      message: `Blacklist -> Failed to check for cringe}`,
+      message: `Blacklist -> Failed to check for cringe`,
     };
   }
 }

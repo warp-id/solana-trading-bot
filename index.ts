@@ -14,6 +14,7 @@ import {
   RPC_WEBSOCKET_ENDPOINT,
   PRE_LOAD_EXISTING_MARKETS,
   LOG_LEVEL,
+  LOG_FILENAME,
   CHECK_IF_MUTABLE,
   CHECK_IF_MINT_IS_RENOUNCED,
   CHECK_IF_FREEZABLE,
@@ -78,6 +79,7 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
 
   logger.info('------- CONFIGURATION START -------');
   logger.info(`Wallet: ${wallet.publicKey.toString()}`);
+  logger.info(`Balance: ${bot.balance} ${quoteToken.symbol}`);
 
   logger.info('- Bot -');
 
@@ -95,6 +97,7 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
   logger.info(`Pre load existing markets: ${PRE_LOAD_EXISTING_MARKETS}`);
   logger.info(`Cache new markets: ${CACHE_NEW_MARKETS}`);
   logger.info(`Log level: ${LOG_LEVEL}`);
+  logger.info(`Log file: ${LOG_FILENAME}`);
 
   logger.info('- Buy -');
   logger.info(`Buy amount: ${botConfig.quoteAmount.toFixed()} ${botConfig.quoteToken.name}`);
@@ -164,6 +167,7 @@ const runListener = async () => {
   const quoteToken = getToken(QUOTE_MINT);
   const botConfig = <BotConfig>{
     wallet,
+    logFilename: LOG_FILENAME,
     quoteAta: getAssociatedTokenAddressSync(quoteToken.mint, wallet.publicKey),
     checkRenounced: CHECK_IF_MINT_IS_RENOUNCED,
     checkFreezable: CHECK_IF_FREEZABLE,
@@ -193,6 +197,7 @@ const runListener = async () => {
   };
 
   const bot = new Bot(connection, marketCache, poolCache, txExecutor, botConfig);
+  await bot.init();
   const valid = await bot.validate();
 
   if (!valid) {

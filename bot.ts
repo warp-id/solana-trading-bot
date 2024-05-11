@@ -331,7 +331,7 @@ export class Bot {
       if (trade) {
         await this.updateBalance();
         this.tradesCount++;
-        const err = trade.complete(this.balance, this.tradesCount);
+        const err = trade.completeAndLog(this.balance, this.tradesCount);
         if (err) {
           logger.warn({ error: err }, `Failed to write trade in journal`);
         }
@@ -517,7 +517,7 @@ export class Bot {
     if (direction === 'sell') {
       if (trade) {
         const amountOut = Number(computedAmountOut.amountOut.toFixed());
-        trade.confirmedSell(amountOut)
+        trade.computeProfit(amountOut)
       }
     }
   }

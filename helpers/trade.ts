@@ -78,14 +78,14 @@ export class Trade {
   }
 
   // Trade sold, compute profit.
-  confirmedSell(amountOut: number) {
+  computeProfit(amountOut: number) {
     this.data.amountOut = amountOut;
     this.data.profit = this.data.amountOut - this.data.amountIn.valueOf();
     this.data.profitPercent = (this.data.profit / this.data.amountIn.valueOf()) * 100;
   }
 
   // Trade completed, save data to log file
-  complete(balance: number, id: number) {
+  completeAndLog(balance: number, id: number) {
     this.data.balance = balance;
     this.data.end = new Date();
     this.data.id = id;

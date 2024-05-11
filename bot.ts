@@ -100,6 +100,8 @@ export class Bot {
 
   async init() {
     await this.updateBalance();
+
+    // Read trades from log file, and get last trade id
     const data = fs.readFileSync(this.logFilename, { flag: 'a+' });
     const lines = data.toString().split('\n').filter((line) => line.length > 0);
     const objects = lines.map(line => JSON.parse(line));

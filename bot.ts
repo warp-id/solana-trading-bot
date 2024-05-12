@@ -46,6 +46,7 @@ export interface BotConfig {
   maxSellRetries: number;
   unitLimit: number;
   unitPrice: number;
+  fee: number,
   takeProfit: number;
   stopLoss: number;
   buySlippage: number;
@@ -517,7 +518,7 @@ export class Bot {
     if (direction === 'sell') {
       if (trade) {
         const amountOut = Number(computedAmountOut.amountOut.toFixed());
-        trade.computeProfit(amountOut)
+        trade.computeProfit(amountOut, this.config.fee);
       }
     }
   }

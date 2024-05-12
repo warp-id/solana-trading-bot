@@ -78,9 +78,9 @@ export class Trade {
   }
 
   // Trade sold, compute profit.
-  computeProfit(amountOut: number) {
+  computeProfit(amountOut: number, fee: number) {
     this.data.amountOut = amountOut;
-    this.data.profit = this.data.amountOut - this.data.amountIn.valueOf();
+    this.data.profit = this.data.amountOut - this.data.amountIn.valueOf() - 2 * fee;
     this.data.profitPercent = (this.data.profit / this.data.amountIn.valueOf()) * 100;
   }
 

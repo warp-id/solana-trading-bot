@@ -1,7 +1,7 @@
 import { MarketCache, PoolCache } from './cache';
 import { Listeners } from './listeners';
-import { Connection, KeyedAccountInfo, Keypair } from '@solana/web3.js';
-import { LIQUIDITY_STATE_LAYOUT_V4, MARKET_STATE_LAYOUT_V3, Token, TokenAmount } from '@raydium-io/raydium-sdk';
+import { Connection, KeyedAccountInfo, Keypair, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { LIQUIDITY_STATE_LAYOUT_V4, MARKET_STATE_LAYOUT_V3, Currency, CurrencyAmount, Token, TokenAmount } from '@raydium-io/raydium-sdk';
 import { AccountLayout, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { Bot, BotConfig } from './bot';
 import { DefaultTransactionExecutor, TransactionExecutor } from './transactions';
@@ -147,17 +147,22 @@ const runListener = async () => {
   const marketCache = new MarketCache(connection);
   const poolCache = new PoolCache();
   let txExecutor: TransactionExecutor;
+  let fee = 0;
 
   switch (TRANSACTION_EXECUTOR) {
     case 'warp': {
       txExecutor = new WarpTransactionExecutor(CUSTOM_FEE);
+      fee = new CurrencyAmount(Currency.SOL, CUSTOM_FEE, false).raw.toNumber() / LAMPORTS_PER_SOL;
       break;
     }
     case 'jito': {
       txExecutor = new JitoTransactionExecutor(CUSTOM_FEE, connection);
+      fee = new CurrencyAmount(Currency.SOL, CUSTOM_FEE, false).raw.toNumber() / LAMPORTS_PER_SOL;
       break;
     }
     default: {
+      const MICROLAMPORTS_PER_LAMPORT = 0.000001;
+      fee = COMPUTE_UNIT_LIMIT * COMPUTE_UNIT_PRICE * MICROLAMPORTS_PER_LAMPORT * LAMPORTS_PER_SOL;
       txExecutor = new DefaultTransactionExecutor(connection);
       break;
     }
@@ -185,6 +190,7 @@ const runListener = async () => {
     maxBuyRetries: MAX_BUY_RETRIES,
     unitLimit: COMPUTE_UNIT_LIMIT,
     unitPrice: COMPUTE_UNIT_PRICE,
+    fee: fee,
     takeProfit: TAKE_PROFIT,
     stopLoss: STOP_LOSS,
     buySlippage: BUY_SLIPPAGE,

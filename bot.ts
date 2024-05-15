@@ -467,7 +467,7 @@ export class Bot {
           const stopSellingAmount = new TokenAmount(this.config.quoteToken, stopSellingFraction, true);
 
           if (amountOut.lt(stopSellingAmount)) {
-            logger.debug(`Token: ${poolKeys.baseMint.toString()} Token dropped more than ${this.config.skipSellingIfLostMoreThan}%, sell stopped. Initial: ${this.config.quoteAmount.toFixed()} | Current: ${amountOut.toFixed()}`);
+            logger.debug(`Token: ${poolKeys.baseMint.toString()} dropped more than ${this.config.skipSellingIfLostMoreThan}%, sell stopped. Initial: ${this.config.quoteAmount.toFixed()} | Current: ${amountOut.toFixed()}`);
             this.stopLoss.delete(poolKeys.baseMint.toString());
 
             // Remove the token from active positions

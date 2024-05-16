@@ -156,8 +156,6 @@ export class Bot {
       await this.mutex.acquire();
     }
 
-    let trade: Trade = new Trade(poolState.baseMint.toString(), Number(this.config.quoteAmount.toFixed()), this.logFilename);
-
     try {
       const [market, mintAta] = await Promise.all([
         this.marketStorage.get(poolState.marketId.toString()),
@@ -174,7 +172,9 @@ export class Bot {
         }
       }
 
+      let trade = new Trade(poolState.baseMint.toString(), this.trade_log_filename);
       trade.transitionStart();
+      this.trades.set(poolState.baseMint.toString(), trade);
 
       for (let i = 0; i < this.config.maxBuyRetries; i++) {
         try {
@@ -204,10 +204,6 @@ export class Bot {
               },
               `Confirmed buy tx`,
             );
-
-            trade.transitionEnd();
-            trade.open();
-            this.trades.set(poolState.baseMint.toString(), trade);
             break;
           }
 
@@ -225,6 +221,7 @@ export class Bot {
       }
     } catch (error) {
       logger.error({ mint: poolState.baseMint.toString(), error }, `Failed to buy token`);
+      this.trades.delete(poolState.baseMint.toString());
     } finally {
       if (this.config.oneTokenAtATime) {
         this.mutex.release();
@@ -303,11 +300,6 @@ export class Bot {
               },
               `Confirmed sell tx`,
             );
-
-            if (trade) {
-              trade.transitionEnd();
-              trade.close();
-            }
             break;
           }
 
@@ -326,18 +318,19 @@ export class Bot {
     } catch (error) {
       logger.error({ mint: rawAccount.mint.toString(), error }, `Failed to sell token`);
       if (trade) {
-        trade.closeFailed();
+        trade.close(0, 0, 'sell_failed');
+        this.balance += trade.profit;
       }
     } finally {
+      await this.updateBalance();
       if (trade) {
-        await this.updateBalance();
         this.tradesCount++;
         const err = trade.completeAndLog(this.balance, this.tradesCount);
         if (err) {
           logger.warn({ error: err }, `Failed to write trade in journal`);
         }
+        this.trades.delete(rawAccount.mint.toString());
       }
-      this.trades.delete(rawAccount.mint.toString());
       if (this.config.oneTokenAtATime) {
         this.sellExecutionCount--;
       }
@@ -511,14 +504,23 @@ export class Bot {
   }
 
   async swap_log(direction: string, tokenIn: Token, tokenOut: Token, amountIn: TokenAmount, computedAmountOut: any) {
-    let trade = this.trades.get(tokenIn.mint.toString());
-    if (!trade) {
-      logger.error({ mint: tokenIn.mint.toString() }, `Trade not found`);
+    if (direction === 'buy') {
+      let trade = this.trades.get(tokenOut.mint.toString());
+      if (!trade) {
+        logger.error({ mint: tokenOut.mint.toString() }, `Trade not found`);
+      } else {
+        const amountIn = Number(amountIn.toFixed());
+        trade.open(amountIn, this.config.fee + (Number(computedAmountOut.fee.toFixed()) / LAMPORTS_PER_SOL));
+      }
     }
     if (direction === 'sell') {
-      if (trade) {
+      let trade = this.trades.get(tokenIn.mint.toString());
+      if (!trade) {
+        logger.error({ mint: tokenIn.mint.toString() }, `Trade not found`);
+      } else {
         const amountOut = Number(computedAmountOut.amountOut.toFixed());
-        trade.computeProfit(amountOut, this.config.fee);
+        trade.close(amountOut, this.config.fee + (Number(computedAmountOut.fee.toFixed()) / LAMPORTS_PER_SOL), 'closed');
+        this.balance += trade.profit;
       }
     }
   }

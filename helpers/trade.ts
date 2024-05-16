@@ -2,92 +2,90 @@ import * as fs from 'fs';
 import * as moment from 'moment';
 import 'moment-duration-format';
 
-export class Trade {
-  private data = {
-    mint: '',
-    amountIn: 0,
-    amountOut: 0,
-    start: new Date(),
-    end: new Date(),
-    time_to_entry: '',
-    time_to_exit: '',
-    profit: 0,
-    profitPercent: 0,
-    balance: 0,
-    status: '',
-    id: 0,
-  }
+export interface TradeData {
+  amountIn: number,
+  amountOut: number,
+  fee: number,
+  start: Date,
+  end: Date,
+  time_to_entry: string,
+  time_to_exit: string,
+  profit: number,
+  profitPercent: number,
+  balance: number,
+  mint: string,
+  status: string,
+  id: number
+}
 
-  private transition_start: Date
-  private transition_end: Date
+export class Trade {
+  private data: TradeData
+  private transition_start: number
+  private transition_end: number
 
   constructor(
     private readonly mint: string,
-    private readonly amountIn: number,
     private readonly logFilename: string
   ) {
-    this.data.mint = mint;
-    this.data.amountIn = amountIn;
-    this.data.amountOut = 0;
-    this.data.profit = 0;
-    this.data.profitPercent = 0;
-    this.data.start = new Date();
-    this.data.end = new Date();
-    this.data.time_to_entry = '0';
-    this.data.time_to_exit = '0';
-    this.data.balance = 0;
-    this.data.status = 'initiated';
-    this.data.id = 0;
+    this.data = {
+      mint: mint,
+      amountIn: 0,
+      amountOut: 0,
+      fee: 0,
+      profit: 0,
+      profitPercent: 0,
+      start: new Date(),
+      end: new Date(),
+      time_to_entry: '0',
+      time_to_exit: '0',
+      balance: 0,
+      status: 'initiated',
+      id: 0,
+    };
 
-    this.transition_start = new Date();
-    this.transition_end = new Date();
+    this.transition_start = 0;
+    this.transition_end = 0;
     this.logFilename = logFilename;
   }
 
   // Help mesure entry and exit time of a trade
   transitionStart() {
-    this.transition_start = new Date();
+    this.transition_start = Date.now();
   }
 
   // Help mesure entry and exit time of a trade
   transitionEnd() {
-    this.transition_end = new Date();
+    this.transition_end = Date.now();
   }
 
   // Trade position entered
-  open() {
-    const duration = this.transition_end.getTime() - this.transition_start.getTime();
+  open(amountIn: number, fee: number) {
+    this.transition_end = Date.now();
+    const duration = this.transition_end - this.transition_start;
     this.data.time_to_entry = moment.duration({ milliseconds: duration }).format();
     this.data.start = new Date();
+    this.data.amountIn = amountIn;
+    this.data.fee += fee;
     this.data.status = 'open';
   }
 
-  // Trade position exited
-  close() {
-    const duration = this.transition_end.getTime() - this.transition_start.getTime();
+  // Trade position closed
+  // Compute profit
+  close(amountOut: number, fee: number, status: string) {
+    this.transition_end = Date.now();
+    const duration = this.transition_end - this.transition_start;
     this.data.time_to_exit = moment.duration({ milliseconds: duration }).format();
-    this.data.status = 'closed';
-  }
-
-  // Trade failed to sell
-  closeFailed() {
-    this.data.profit = -this.data.amountIn.valueOf();
-    this.data.profitPercent = -100;
-    this.data.time_to_exit = '0';
-    this.data.status = 'sell_failed';
-  }
-
-  // Trade sold, compute profit.
-  computeProfit(amountOut: number, fee: number) {
+    this.data.end = new Date();
     this.data.amountOut = amountOut;
-    this.data.profit = this.data.amountOut - this.data.amountIn.valueOf() - 2 * fee;
-    this.data.profitPercent = (this.data.profit / this.data.amountIn.valueOf()) * 100;
+    this.data.fee += fee;
+    this.data.profit = this.data.amountOut - this.data.amountIn - this.data.fee;
+    this.data.profitPercent = (this.data.profit / this.data.amountIn) * 100;
+    this.data.status = status;
   }
 
   // Trade completed, save data to log file
   completeAndLog(balance: number, id: number) {
     this.data.balance = balance;
-    this.data.end = new Date();
     this.data.id = id;
 
     if (this.logFilename !== 'none') {
@@ -97,5 +95,13 @@ export class Trade {
         return err;
       }
     }
+  }
+
+  get profit() {
+    return this.data.profit;
+  }
+
+  get amountIn() {
+    return this.data.amountIn;
   }
 }

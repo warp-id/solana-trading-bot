@@ -36,6 +36,7 @@ You should see the following output:
 #### Bot
 
 - `LOG_LEVEL` - Set logging level, e.g., `info`, `debug`, `trace`, etc.
+- `LOG_FILENAME` - Filename for trade log journal, set to `none` to disable.
 - `ONE_TOKEN_AT_A_TIME` - Set to `true` to process buying one token at a time.
 - `COMPUTE_UNIT_LIMIT` - Compute limit used to calculate fees.
 - `COMPUTE_UNIT_PRICE` - Compute price used to calculate fees.

@@ -36,7 +36,7 @@ You should see the following output:
 #### Bot
 
 - `LOG_LEVEL` - Set logging level, e.g., `info`, `debug`, `trace`, etc.
-- `ONE_TOKEN_AT_A_TIME` - Set to `true` to process buying one token at a time.
+- `MAX_TOKENS_AT_A_TIME` - Set to `1` to process buying one token at a time.
 - `COMPUTE_UNIT_LIMIT` - Compute limit used to calculate fees.
 - `COMPUTE_UNIT_PRICE` - Compute price used to calculate fees.
 - `PRE_LOAD_EXISTING_MARKETS` - Bot will load all existing markets in memory on start.
@@ -72,6 +72,9 @@ You should see the following output:
   - Take profit is calculated based on quote mint.
 - `STOP_LOSS` - Percentage loss at which to stop the loss.
   - Stop loss is calculated based on quote mint.
+- `TRAILING_STOP_LOSS` - Set to `true` to use trailing stop loss.
+- `SKIP_SELLING_IF_LOST_MORE_THAN` - If token loses more than X% of value, bot will not try to sell
+  - This config is useful if you find yourself in a situation when rugpull happen, and you failed to sell. In this case there is a big loss of value, and sometimes it's more beneficial to keep the token, instead of selling it for almost nothing.
 - `SELL_SLIPPAGE` - Slippage %.
 
 #### Snipe list

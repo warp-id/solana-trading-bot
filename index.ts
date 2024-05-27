@@ -1,7 +1,13 @@
 import { MarketCache, PoolCache } from './cache';
 import { Listeners } from './listeners';
-import { Connection, KeyedAccountInfo, Keypair } from '@solana/web3.js';
-import { LIQUIDITY_STATE_LAYOUT_V4, MARKET_STATE_LAYOUT_V3, Token, TokenAmount } from '@raydium-io/raydium-sdk';
+import { Connection, KeyedAccountInfo, Keypair, PublicKey } from '@solana/web3.js';
+import {
+  LIQUIDITY_STATE_LAYOUT_V4,
+  MARKET_STATE_LAYOUT_V3,
+  Token,
+  TokenAmount,
+  publicKey,
+} from '@raydium-io/raydium-sdk';
 import { AccountLayout, getAssociatedTokenAddressSync } from '@solana/spl-token';
 import { Bot, BotConfig } from './bot';
 import { DefaultTransactionExecutor, TransactionExecutor } from './transactions';
@@ -49,6 +55,7 @@ import {
 import { version } from './package.json';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
 import { JitoTransactionExecutor } from './transactions/jito-rpc-transaction-executor';
+import bs58 from 'bs58';
 
 const connection = new Connection(RPC_ENDPOINT, {
   wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
@@ -205,7 +212,7 @@ const runListener = async () => {
   }
 
   const runTimestamp = Math.floor(new Date().getTime() / 1000);
-  const listeners = new Listeners(connection);
+  const listeners = new Listeners();
   await listeners.start({
     walletPublicKey: wallet.publicKey,
     quoteToken,
@@ -213,30 +220,30 @@ const runListener = async () => {
     cacheNewMarkets: CACHE_NEW_MARKETS,
   });
 
-  listeners.on('market', (updatedAccountInfo: KeyedAccountInfo) => {
-    const marketState = MARKET_STATE_LAYOUT_V3.decode(updatedAccountInfo.accountInfo.data);
-    marketCache.save(updatedAccountInfo.accountId.toString(), marketState);
+  listeners.on('market', (chunk: any) => {
+    const marketState = MARKET_STATE_LAYOUT_V3.decode(chunk.account.account.data);
+    marketCache.save(bs58.encode(chunk.account.account.pubkey), marketState);
   });
 
-  listeners.on('pool', async (updatedAccountInfo: KeyedAccountInfo) => {
-    const poolState = LIQUIDITY_STATE_LAYOUT_V4.decode(updatedAccountInfo.accountInfo.data);
+  listeners.on('pool', async (chunk: any) => {
+    const poolState = LIQUIDITY_STATE_LAYOUT_V4.decode(chunk.account.account.data);
     const poolOpenTime = parseInt(poolState.poolOpenTime.toString());
     const exists = await poolCache.get(poolState.baseMint.toString());
 
     if (!exists && poolOpenTime > runTimestamp) {
-      poolCache.save(updatedAccountInfo.accountId.toString(), poolState);
-      await bot.buy(updatedAccountInfo.accountId, poolState);
+      poolCache.save(bs58.encode(chunk.account.account.pubkey).toString(), poolState);
+      await bot.buy(new PublicKey(chunk.account.account.pubkey), poolState);
     }
   });
 
-  listeners.on('wallet', async (updatedAccountInfo: KeyedAccountInfo) => {
-    const accountData = AccountLayout.decode(updatedAccountInfo.accountInfo.data);
+  listeners.on('wallet', async (chunk: any) => {
+    const accountData = AccountLayout.decode(chunk.account.account.data);
 
     if (accountData.mint.equals(quoteToken.mint)) {
       return;
     }
 
-    await bot.sell(updatedAccountInfo.accountId, accountData);
+    await bot.sell(new PublicKey(chunk.account.account.pubkey), accountData);
   });
 
   printDetails(wallet, quoteToken, bot);

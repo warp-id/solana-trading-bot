@@ -21,6 +21,7 @@ export const PRIVATE_KEY = retrieveEnvVariable('PRIVATE_KEY', logger);
 export const NETWORK = 'mainnet-beta';
 export const COMMITMENT_LEVEL: Commitment = retrieveEnvVariable('COMMITMENT_LEVEL', logger) as Commitment;
 export const RPC_ENDPOINT = retrieveEnvVariable('RPC_ENDPOINT', logger);
+export const GRPC_ENDPOINT = retrieveEnvVariable('GRPC_ENDPOINT', logger);
 export const RPC_WEBSOCKET_ENDPOINT = retrieveEnvVariable('RPC_WEBSOCKET_ENDPOINT', logger);
 
 // Bot

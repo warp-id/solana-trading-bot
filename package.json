@@ -5,13 +5,15 @@
   "version": "2.0.1",
   "scripts": {
     "start": "ts-node index.ts",
-    "tsc": "tsc --noEmit"
+    "tsc": "tsc --noEmit",
+    "test": "ts-node test.ts"
   },
   "dependencies": {
     "@metaplex-foundation/mpl-token-metadata": "^3.2.1",
     "@raydium-io/raydium-sdk": "^1.3.1-beta.47",
-    "@solana/spl-token": "^0.4.0",
+    "@solana/spl-token": "^0.4.6",
     "@solana/web3.js": "^1.89.1",
+    "@triton-one/yellowstone-grpc": "^0.4.0",
     "async-mutex": "^0.5.0",
     "axios": "^1.6.8",
     "bigint-buffer": "^1.1.5",

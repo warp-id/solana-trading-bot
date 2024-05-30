@@ -1,97 +1,113 @@
 import Client, { CommitmentLevel, SubscribeRequest } from '@triton-one/yellowstone-grpc';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
-import { LIQUIDITY_STATE_LAYOUT_V4, MAINNET_PROGRAM_ID, MARKET_STATE_LAYOUT_V3, Token } from '@raydium-io/raydium-sdk';
+import {
+  ApiPoolInfoV4,
+  LIQUIDITY_STATE_LAYOUT_V4,
+  LiquidityStateV4,
+  MAINNET_PROGRAM_ID,
+  MARKET_STATE_LAYOUT_V3,
+  Market,
+  SPL_MINT_LAYOUT,
+  Token,
+} from '@raydium-io/raydium-sdk';
 import bs58 from 'bs58';
+import { Connection, PublicKey } from '@solana/web3.js';
+import base58 from 'bs58';
+import { COMMITMENT_LEVEL, RPC_ENDPOINT, RPC_WEBSOCKET_ENDPOINT } from './helpers';
 
 (async function main() {
-  const client = new Client('http://gastroscopic-agars-gGx9fjhXm7.helius-rpc.com:4001', '', {});
-
-  const stream = await client.subscribe();
-
-  stream.on('data', (chunk: any) => {
-    if (chunk.filters[0] === 'ammv4') {
-      const poolState = LIQUIDITY_STATE_LAYOUT_V4.decode(chunk.account.account.data);
-      const poolOpenTime = parseInt(poolState.poolOpenTime.toString());
-
-      console.log('ammv4', chunk, poolState, poolOpenTime);
-    } else if (chunk.filters[0] === 'market') {
-      const marketState = MARKET_STATE_LAYOUT_V3.decode(chunk.account.account.data);
-      console.log('market', chunk, marketState, bs58.encode(chunk.account.account.pubkey).toString() );
-    } else {
-      console.log('data', chunk);
-    }
+  const connection = new Connection(RPC_ENDPOINT, {
+    // wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
+    commitment: COMMITMENT_LEVEL,
   });
 
-  const request: SubscribeRequest = {
-    slots: {},
-    accounts: {
-      market: {
-        account: [],
-        owner: [MAINNET_PROGRAM_ID.OPENBOOK_MARKET.toBase58()],
-        filters: [
-          {
-            datasize: MARKET_STATE_LAYOUT_V3.span.toString(),
-          },
-          {
-            memcmp: {
-              offset: MARKET_STATE_LAYOUT_V3.offsetOf('quoteMint').toString(),
-              bytes: bs58.decode('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
-            },
-          },
-        ],
-      },
-      ammv4: {
-        account: [],
-        owner: [MAINNET_PROGRAM_ID.AmmV4.toBase58()],
-        filters: [
-          {
-            datasize: LIQUIDITY_STATE_LAYOUT_V4.span.toString(),
-          },
-          {
-            memcmp: {
-              offset: LIQUIDITY_STATE_LAYOUT_V4.offsetOf('quoteMint').toString(),
-              bytes: bs58.decode('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
-            },
-          },
-          {
-            memcmp: {
-              offset: LIQUIDITY_STATE_LAYOUT_V4.offsetOf('marketProgramId').toString(),
-              bytes: MAINNET_PROGRAM_ID.OPENBOOK_MARKET.toBytes(),
-            },
-          },
-          {
-            memcmp: {
-              offset: LIQUIDITY_STATE_LAYOUT_V4.offsetOf('status').toString(),
-              bytes: Buffer.from([6, 0, 0, 0, 0, 0, 0, 0]),
-            },
-          },
-        ],
-      },
-      wallet: {
-        account: [],
-        owner: [TOKEN_PROGRAM_ID.toBase58()],
-        filters: [
-          {
-            datasize: '165',
-          },
-          {
-            memcmp: {
-              offset: '32',
-              bytes: bs58.decode('9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin'),
-            },
-          },
-        ],
-      },
-    },
-    transactions: {},
-    blocks: {},
-    blocksMeta: {},
-    accountsDataSlice: [],
-    commitment: CommitmentLevel.PROCESSED,
-    entry: {},
-  };
+  const client = new Client('', '', {});
 
-  stream.write(request, (err: any) => {
-    console.log('err', err);
+  const programId = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
+  const createPoolFeeAccount = '7YttLkHDoNj9wyDur5pM1ejNaAvT9X4eqaYcHQqtj2G5';
+
+  const rpcConnInfo = await client.subscribe();
+
+  rpcConnInfo.on('data', (data: any) => {
+    console.log(data);
+    callback(data, programId, connection);
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    if (rpcConnInfo === undefined) throw Error('rpc conn error');
+    rpcConnInfo.write(
+      {
+        slots: {},
+        accounts: {},
+        transactions: {
+          transactionsSubKey: {
+            accountInclude: [createPoolFeeAccount],
+            accountExclude: [],
+            accountRequired: [],
+          },
+        },
+        blocks: {},
+        blocksMeta: {},
+        accountsDataSlice: [],
+        entry: {},
+        commitment: 1,
+      },
+      (err: Error) => {
+        if (err === null || err === undefined) {
+          resolve();
+        } else {
+          reject(err);
+        }
+      },
+    );
+  }).catch((reason) => {
+    console.error(reason);
+    throw reason;
   });
 })();
+
+async function callback(data: any, programId: string, connection: Connection) {
+  if (!data.filters.includes('transactionsSubKey')) return undefined;
+
+  const info = data.transaction;
+  if (info.transaction.meta.err !== undefined) return undefined;
+
+  const formatData: {
+    updateTime: number;
+    slot: number;
+    txid: string;
+    poolInfos: LiquidityStateV4[];
+  } = {
+    updateTime: new Date().getTime(),
+    slot: info.slot,
+    txid: base58.encode(info.transaction.signature),
+    poolInfos: [],
+  };
+
+  const accounts = info.transaction.transaction.message.accountKeys.map((i: Buffer) => base58.encode(i));
+
+  for (const item of [
+    ...info.transaction.transaction.message.instructions,
+    ...info.transaction.meta.innerInstructions.map((i: any) => i.instructions).flat(),
+  ]) {
+    if (accounts[item.programIdIndex] !== programId) continue;
+
+    if ([...(item.data as Buffer).values()][0] != 1) continue;
+
+    const keyIndex = [...(item.accounts as Buffer).values()];
+    console.log(accounts[keyIndex[4]]);
+
+    let pairAccount = await connection.getAccountInfo(new PublicKey(accounts[keyIndex[4]]));
+    if (pairAccount === null) throw Error('get account info error');
+
+    let poolState = LIQUIDITY_STATE_LAYOUT_V4.decode(pairAccount!.data);
+
+    if (poolState.status.toNumber() !== 6) continue;
+
+    formatData.poolInfos.push(poolState);
+  }
+
+  console.log(formatData);
+
+  return formatData;
+}

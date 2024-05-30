@@ -103,22 +103,24 @@ export class Bot {
   }
 
   public async buy(accountId: PublicKey, poolState: LiquidityStateV4) {
-    logger.trace({ mint: poolState.baseMint }, `Processing new pool...`);
+    let baseMint = poolState.quoteMint.equals(this.config.quoteToken.mint) ? poolState.baseMint : poolState.quoteMint;
 
-    if (this.config.useSnipeList && !this.snipeListCache?.isInList(poolState.baseMint.toString())) {
-      logger.debug({ mint: poolState.baseMint.toString() }, `Skipping buy because token is not in a snipe list`);
+    logger.trace({ mint: baseMint }, `Processing new pool...`);
+
+    if (this.config.useSnipeList && !this.snipeListCache?.isInList(baseMint.toString())) {
+      logger.debug({ mint: baseMint.toString() }, `Skipping buy because token is not in a snipe list`);
       return;
     }
 
     if (this.config.autoBuyDelay > 0) {
-      logger.debug({ mint: poolState.baseMint }, `Waiting for ${this.config.autoBuyDelay} ms before buy`);
+      logger.debug({ mint: baseMint }, `Waiting for ${this.config.autoBuyDelay} ms before buy`);
       await sleep(this.config.autoBuyDelay);
     }
 
     if (this.config.oneTokenAtATime) {
       if (this.mutex.isLocked() || this.sellExecutionCount > 0) {
         logger.debug(
-          { mint: poolState.baseMint.toString() },
+          { mint: baseMint.toString() },
           `Skipping buy because one token at a time is turned on and token is already being processed`,
         );
         return;
@@ -130,7 +132,7 @@ export class Bot {
     try {
       const [market, mintAta] = await Promise.all([
         this.marketStorage.get(poolState.marketId.toString()),
-        getAssociatedTokenAddress(poolState.baseMint, this.config.wallet.publicKey),
+        getAssociatedTokenAddress(baseMint, this.config.wallet.publicKey),
       ]);
       const poolKeys: LiquidityPoolKeysV4 = createPoolKeys(accountId, poolState, market);
 
@@ -138,7 +140,7 @@ export class Bot {
         const match = await this.filterMatch(poolKeys);
 
         if (!match) {
-          logger.trace({ mint: poolKeys.baseMint.toString() }, `Skipping buy because pool doesn't match filters`);
+          logger.trace({ mint: baseMint.toString() }, `Skipping buy because pool doesn't match filters`);
           return;
         }
       }
@@ -146,10 +148,19 @@ export class Bot {
       for (let i = 0; i < this.config.maxBuyRetries; i++) {
         try {
           logger.info(
-            { mint: poolState.baseMint.toString() },
+            { mint: baseMint.toString() },
             `Send buy transaction attempt: ${i + 1}/${this.config.maxBuyRetries}`,
           );
-          const tokenOut = new Token(TOKEN_PROGRAM_ID, poolKeys.baseMint, poolKeys.baseDecimals);
+          // tokenOut 是 baseMint 和 quoteMint 中不为 this.config.quoteMint 的那个
+          const [tokenOutMint, tokenOutDecimals] = [
+            [poolKeys.baseMint, poolKeys.baseDecimals] as const,
+            [poolKeys.quoteMint, poolKeys.quoteDecimals] as const,
+          ].find(([mint]) => mint.toString() !== this.config.quoteToken.mint.toString())!;
+
+          const tokenOut = new Token(TOKEN_PROGRAM_ID, tokenOutMint, tokenOutDecimals);
+
+          // const tokenOut = new Token(TOKEN_PROGRAM_ID, poolKeys.baseMint, poolKeys.baseDecimals);
+
           const result = await this.swap(
             poolKeys,
             this.config.quoteAta,
@@ -165,7 +176,7 @@ export class Bot {
           if (result.confirmed) {
             logger.info(
               {
-                mint: poolState.baseMint.toString(),
+                mint: baseMint.toString(),
                 signature: result.signature,
                 url: `https://solscan.io/tx/${result.signature}?cluster=${NETWORK}`,
               },
@@ -177,18 +188,18 @@ export class Bot {
 
           logger.info(
             {
-              mint: poolState.baseMint.toString(),
+              mint: baseMint.toString(),
               signature: result.signature,
               error: result.error,
             },
             `Error confirming buy tx`,
           );
         } catch (error) {
-          logger.debug({ mint: poolState.baseMint.toString(), error }, `Error confirming buy transaction`);
+          logger.debug({ mint: baseMint.toString(), error }, `Error confirming buy transaction`);
         }
       }
     } catch (error) {
-      logger.error({ mint: poolState.baseMint.toString(), error }, `Failed to buy token`);
+      logger.error({ mint: baseMint.toString(), error }, `Failed to buy token`);
     } finally {
       if (this.config.oneTokenAtATime) {
         this.mutex.release();
@@ -211,7 +222,11 @@ export class Bot {
         return;
       }
 
-      const tokenIn = new Token(TOKEN_PROGRAM_ID, poolData.state.baseMint, poolData.state.baseDecimal.toNumber());
+      let [baseMint, baseDecimal] = poolData.state.quoteMint.equals(this.config.quoteToken.mint)
+        ? <const>[poolData.state.baseMint, poolData.state.baseDecimal]
+        : <const>[poolData.state.quoteMint, poolData.state.quoteDecimal];
+
+      const tokenIn = new Token(TOKEN_PROGRAM_ID, baseMint, baseDecimal.toNumber());
       const tokenAmountIn = new TokenAmount(tokenIn, rawAccount.amount, true);
 
       if (tokenAmountIn.isZero()) {
@@ -309,6 +324,7 @@ export class Bot {
     });
 
     const latestBlockhash = await this.connection.getLatestBlockhash();
+
     const { innerTransaction } = Liquidity.makeSwapFixedInInstruction(
       {
         poolKeys: poolKeys,

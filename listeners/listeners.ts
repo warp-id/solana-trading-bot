@@ -4,6 +4,9 @@ import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { EventEmitter } from 'events';
 import Client, { CommitmentLevel, SubscribeRequest } from '@triton-one/yellowstone-grpc';
 import { GRPC_ENDPOINT, logger } from '../helpers';
+import bs58 from 'bs58';
+
+const createPoolFeeAccount = '7YttLkHDoNj9wyDur5pM1ejNaAvT9X4eqaYcHQqtj2G5';
 
 export class Listeners extends EventEmitter {
   private stream: any;
@@ -29,48 +32,6 @@ export class Listeners extends EventEmitter {
     const request: SubscribeRequest = {
       slots: {},
       accounts: {
-        market: {
-          account: [],
-          owner: [MAINNET_PROGRAM_ID.OPENBOOK_MARKET.toBase58()],
-          filters: [
-            {
-              datasize: MARKET_STATE_LAYOUT_V3.span.toString(),
-            },
-            {
-              memcmp: {
-                offset: MARKET_STATE_LAYOUT_V3.offsetOf('quoteMint').toString(),
-                bytes: config.quoteToken.mint.toBytes(),
-              },
-            },
-          ],
-        },
-        pool: {
-          account: [],
-          owner: [MAINNET_PROGRAM_ID.AmmV4.toBase58()],
-          filters: [
-            {
-              datasize: LIQUIDITY_STATE_LAYOUT_V4.span.toString(),
-            },
-            {
-              memcmp: {
-                offset: LIQUIDITY_STATE_LAYOUT_V4.offsetOf('quoteMint').toString(),
-                bytes: config.quoteToken.mint.toBytes(),
-              },
-            },
-            {
-              memcmp: {
-                offset: LIQUIDITY_STATE_LAYOUT_V4.offsetOf('marketProgramId').toString(),
-                bytes: MAINNET_PROGRAM_ID.OPENBOOK_MARKET.toBytes(),
-              },
-            },
-            {
-              memcmp: {
-                offset: LIQUIDITY_STATE_LAYOUT_V4.offsetOf('status').toString(),
-                bytes: Buffer.from([6, 0, 0, 0, 0, 0, 0, 0]),
-              },
-            },
-          ],
-        },
         wallet: {
           account: [],
           owner: [TOKEN_PROGRAM_ID.toBase58()],
@@ -87,18 +48,31 @@ export class Listeners extends EventEmitter {
           ],
         },
       },
-      transactions: {},
+      transactions: {
+        pool: {
+          accountInclude: [createPoolFeeAccount],
+          accountExclude: [],
+          accountRequired: [],
+        },
+      },
       blocks: {},
       blocksMeta: {},
       accountsDataSlice: [],
-      commitment: CommitmentLevel.PROCESSED,
+      commitment: CommitmentLevel.CONFIRMED,
       entry: {},
     };
 
-    this.stream.write(request, (error: any) => {
-      if (error) {
-        logger.error(error);
-      }
+    await new Promise<void>((resolve, reject) => {
+      this.stream.write(request, (err: any) => {
+        if (err === null || err === undefined) {
+          resolve();
+        } else {
+          reject(err);
+        }
+      });
+    }).catch((reason) => {
+      console.error(reason);
+      throw reason;
     });
   }
 

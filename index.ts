@@ -3,6 +3,7 @@ import { Listeners } from './listeners';
 import { Connection, KeyedAccountInfo, Keypair, PublicKey } from '@solana/web3.js';
 import {
   LIQUIDITY_STATE_LAYOUT_V4,
+  MAINNET_PROGRAM_ID,
   MARKET_STATE_LAYOUT_V3,
   Token,
   TokenAmount,
@@ -56,9 +57,10 @@ import { version } from './package.json';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
 import { JitoTransactionExecutor } from './transactions/jito-rpc-transaction-executor';
 import bs58 from 'bs58';
+import base58 from 'bs58';
 
 const connection = new Connection(RPC_ENDPOINT, {
-  wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
+  // wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
   commitment: COMMITMENT_LEVEL,
 });
 
@@ -213,26 +215,62 @@ const runListener = async () => {
 
   const runTimestamp = Math.floor(new Date().getTime() / 1000);
   const listeners = new Listeners();
-  await listeners.start({
-    walletPublicKey: wallet.publicKey,
-    quoteToken,
-    autoSell: AUTO_SELL,
-    cacheNewMarkets: CACHE_NEW_MARKETS,
-  });
 
-  listeners.on('market', (chunk: any) => {
-    const marketState = MARKET_STATE_LAYOUT_V3.decode(chunk.account.account.data);
-    marketCache.save(bs58.encode(chunk.account.account.pubkey), marketState);
-  });
+  // listeners.on('market', (chunk: any) => {
+  //   const marketState = MARKET_STATE_LAYOUT_V3.decode(chunk.account.account.data);
+  //   marketCache.save(bs58.encode(chunk.account.account.pubkey), marketState);
+  // });
 
-  listeners.on('pool', async (chunk: any) => {
-    const poolState = LIQUIDITY_STATE_LAYOUT_V4.decode(chunk.account.account.data);
-    const poolOpenTime = parseInt(poolState.poolOpenTime.toString());
-    const exists = await poolCache.get(poolState.baseMint.toString());
+  listeners.on('pool', async (data: any) => {
+    const info = data.transaction;
+    const accounts = info.transaction.transaction.message.accountKeys.map((i: Buffer) => base58.encode(i));
 
-    if (!exists && poolOpenTime > runTimestamp) {
-      poolCache.save(bs58.encode(chunk.account.account.pubkey).toString(), poolState);
-      await bot.buy(new PublicKey(chunk.account.account.pubkey), poolState);
+    for (const item of [
+      ...info.transaction.transaction.message.instructions,
+      ...info.transaction.meta.innerInstructions.map((i: any) => i.instructions).flat(),
+    ]) {
+      const keyIndex = [...(item.accounts as Buffer).values()];
+
+      if (accounts[item.programIdIndex] !== MAINNET_PROGRAM_ID.AmmV4.toBase58()) continue;
+
+      if ([...(item.data as Buffer).values()][0] != 1) continue;
+      if (!accounts[keyIndex[9]] || !accounts[keyIndex[8]] || !accounts[keyIndex[4]]) continue;
+
+      const pair = new PublicKey(accounts[keyIndex[4]]);
+      const quoteMint = new PublicKey(accounts[keyIndex[9]]);
+      const baseMint = new PublicKey(accounts[keyIndex[8]]);
+
+      console.log({
+        programId: accounts[item.programIdIndex],
+        v: [...(item.data as Buffer).values()][0],
+        quoteMint: quoteMint.toString(),
+        baseMint: baseMint.toString(),
+      });
+
+      if (![quoteMint.toString(), baseMint.toString()].includes(quoteToken.mint.toString())) {
+        logger.debug({ mint: quoteMint.toString() }, `quotemint error`);
+        continue;
+      }
+
+      let pairAccount = await connection.getAccountInfo(pair);
+      if (pairAccount === null) {
+        logger.debug(`pairAccount is null`);
+        continue;
+      }
+
+      let poolState = LIQUIDITY_STATE_LAYOUT_V4.decode(pairAccount!.data);
+
+      // if (poolState.status.toNumber() !== 6) {
+      //   logger.debug(`status error`);
+      //   continue;
+      // }
+
+      const exists = await poolCache.get(poolState.baseMint.toString());
+
+      if (!exists) {
+        poolCache.save(pair.toString(), poolState);
+        await bot.buy(pair, poolState);
+      }
     }
   });
 
@@ -247,6 +285,14 @@ const runListener = async () => {
   });
 
   printDetails(wallet, quoteToken, bot);
+
+  await listeners.start({
+    walletPublicKey: wallet.publicKey,
+    quoteToken,
+    autoSell: AUTO_SELL,
+    cacheNewMarkets: CACHE_NEW_MARKETS,
+  });
+  
 };
 
 runListener();

@@ -1,6 +1,6 @@
 import { Filter, FilterResult } from './pool-filters';
 import { MintLayout } from '@solana/spl-token';
-import { Connection } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 import { LiquidityPoolKeysV4 } from '@raydium-io/raydium-sdk';
 import { logger } from '../helpers';
 

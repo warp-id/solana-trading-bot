@@ -1,6 +1,6 @@
 import { Filter, FilterResult } from './pool-filters';
 import { MintLayout } from '@solana/spl-token';
-import { Connection } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 import { LiquidityPoolKeysV4 } from '@raydium-io/raydium-sdk';
 import { logger } from '../helpers';
 
@@ -29,16 +29,16 @@ export class RenouncedFreezeFilter implements Filter {
       }
 
       const deserialize = MintLayout.decode(accountInfo.data);
-      const renounced = !this.checkRenounced || deserialize.mintAuthorityOption === 0;
-      const freezable = !this.checkFreezable || deserialize.freezeAuthorityOption !== 0;
-      const ok = renounced && !freezable;
+      const renouncedOK = !this.checkRenounced || (deserialize.mintAuthorityOption === 0);
+      const freezeOK = !this.checkFreezable || (deserialize.freezeAuthorityOption === 0 && (deserialize.freezeAuthority === null || deserialize.freezeAuthority.equals(PublicKey.default)));
+      const ok = renouncedOK && freezeOK;
       const message: string[] = [];
 
-      if (!renounced) {
+      if (!renouncedOK) {
         message.push('mint');
       }
 
-      if (freezable) {
+      if (!freezeOK) {
         message.push('freeze');
       }
 

@@ -12,11 +12,7 @@ export class BurnFilter implements Filter {
       const burned = amount.value.uiAmount === 0;
       return { ok: burned, message: burned ? undefined : "Burned -> Creator didn't burn LP" };
     } catch (e: any) {
-      if (e.code == -32602) {
-        return { ok: true };
-      }
-
-      logger.error({ mint: poolKeys.baseMint }, `Failed to check if LP is burned`);
+      logger.error({ mint: poolKeys.baseMint, error: e }, `Burned -> Failed to check if LP is burned`);
     }
 
     return { ok: false, message: 'Failed to check if LP is burned' };

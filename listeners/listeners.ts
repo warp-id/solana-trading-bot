@@ -1,10 +1,9 @@
-import { LIQUIDITY_STATE_LAYOUT_V4, MAINNET_PROGRAM_ID, MARKET_STATE_LAYOUT_V3, Token } from '@raydium-io/raydium-sdk';
+import { Token } from '@raydium-io/raydium-sdk';
 import { PublicKey } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { EventEmitter } from 'events';
 import Client, { CommitmentLevel, SubscribeRequest } from '@triton-one/yellowstone-grpc';
-import { GRPC_ENDPOINT, logger } from '../helpers';
-import bs58 from 'bs58';
+import { GRPC_ENDPOINT, GRPC_TOKEN } from '../helpers';
 
 const createPoolFeeAccount = '7YttLkHDoNj9wyDur5pM1ejNaAvT9X4eqaYcHQqtj2G5';
 
@@ -21,7 +20,7 @@ export class Listeners extends EventEmitter {
     autoSell: boolean;
     cacheNewMarkets: boolean;
   }) {
-    const client = new Client(GRPC_ENDPOINT, '', {});
+    const client = new Client(GRPC_ENDPOINT, GRPC_TOKEN, {});
     this.stream = await client.subscribe();
 
     this.stream.on('data', (chunk: any) => {

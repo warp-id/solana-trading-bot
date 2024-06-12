@@ -149,7 +149,7 @@ export class Bot {
         try {
           logger.info(
             { mint: baseMint.toString() },
-            `Send buy transaction attempt: ${i + 1}/${this.config.maxBuyRetries}`,
+            `Send buy transaction attempt: ${i + 1}/${this.config.maxBuyRetries},${+new Date()}`,
           );
           // tokenOut 是 baseMint 和 quoteMint 中不为 this.config.quoteMint 的那个
           const [tokenOutMint, tokenOutDecimals] = [
@@ -180,7 +180,7 @@ export class Bot {
                 signature: result.signature,
                 url: `https://solscan.io/tx/${result.signature}?cluster=${NETWORK}`,
               },
-              `Confirmed buy tx`,
+              `Confirmed buy tx,${+new Date()}`,
             );
 
             break;

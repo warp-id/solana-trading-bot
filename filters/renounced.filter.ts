@@ -30,7 +30,7 @@ export class RenouncedFreezeFilter implements Filter {
 
       const deserialize = MintLayout.decode(accountInfo.data);
       const renounced = deserialize.mintAuthorityOption === 0;
-      const freezable = deserialize.freezeAuthorityOption === 0;
+      const freezable = deserialize.freezeAuthorityOption !== 0;
       let ok = true;
       const message: string[] = [];
 

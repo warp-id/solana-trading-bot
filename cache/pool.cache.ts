@@ -1,4 +1,4 @@
-import { LiquidityStateV4 } from '@raydium-io/raydium-sdk';
+import { LiquidityStateV4, Token } from '@raydium-io/raydium-sdk';
 import { logger } from '../helpers';
 
 export class PoolCache {
@@ -8,9 +8,17 @@ export class PoolCache {
   >();
 
   public save(id: string, state: LiquidityStateV4) {
-    if (!this.keys.has(state.baseMint.toString())) {
-      logger.trace(`Caching new pool for mint: ${state.baseMint.toString()}`);
-      this.keys.set(state.baseMint.toString(), { id, state });
+    // baseMint 不能是 wsol 和 usdc
+    const baseMint = [Token.WSOL.mint.toBase58(), 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'].includes(
+      state.quoteMint.toString(),
+    )
+      ? state.baseMint
+      : state.quoteMint;
+
+    if (!this.keys.has(baseMint.toString())) {
+      logger.trace(`Caching new pool for mint: ${baseMint.toString()}`);
+
+      this.keys.set(baseMint.toString(), { id, state });
     }
   }
 

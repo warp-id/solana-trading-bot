@@ -105,7 +105,7 @@ export class Bot {
   public async buy(accountId: PublicKey, poolState: LiquidityStateV4) {
     let baseMint = poolState.quoteMint.equals(this.config.quoteToken.mint) ? poolState.baseMint : poolState.quoteMint;
 
-    logger.trace({ mint: baseMint }, `Processing new pool...`);
+    logger.trace({ mint: baseMint }, `Processing new pool... ${+new Date()}`);
 
     if (this.config.useSnipeList && !this.snipeListCache?.isInList(baseMint.toString())) {
       logger.debug({ mint: baseMint.toString() }, `Skipping buy because token is not in a snipe list`);
@@ -176,6 +176,7 @@ export class Bot {
           if (result.confirmed) {
             logger.info(
               {
+                time: +new Date(),
                 mint: baseMint.toString(),
                 signature: result.signature,
                 url: `https://solscan.io/tx/${result.signature}?cluster=${NETWORK}`,

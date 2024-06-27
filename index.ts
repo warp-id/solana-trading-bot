@@ -241,6 +241,7 @@ const runListener = async () => {
       const baseMint = new PublicKey(accounts[keyIndex[8]]);
 
       console.log({
+        time: +new Date(),
         programId: accounts[item.programIdIndex],
         v: [...(item.data as Buffer).values()][0],
         quoteMint: quoteMint.toString(),
@@ -292,7 +293,6 @@ const runListener = async () => {
     autoSell: AUTO_SELL,
     cacheNewMarkets: CACHE_NEW_MARKETS,
   });
-  
 };
 
 runListener();

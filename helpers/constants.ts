@@ -46,6 +46,7 @@ export const AUTO_SELL_DELAY = Number(retrieveEnvVariable('AUTO_SELL_DELAY', log
 export const MAX_SELL_RETRIES = Number(retrieveEnvVariable('MAX_SELL_RETRIES', logger));
 export const TAKE_PROFIT = Number(retrieveEnvVariable('TAKE_PROFIT', logger));
 export const STOP_LOSS = Number(retrieveEnvVariable('STOP_LOSS', logger));
+export const TRAILING_STOP_LOSS = retrieveEnvVariable('TRAILING_STOP_LOSS', logger);
 export const PRICE_CHECK_INTERVAL = Number(retrieveEnvVariable('PRICE_CHECK_INTERVAL', logger));
 export const PRICE_CHECK_DURATION = Number(retrieveEnvVariable('PRICE_CHECK_DURATION', logger));
 export const SELL_SLIPPAGE = Number(retrieveEnvVariable('SELL_SLIPPAGE', logger));

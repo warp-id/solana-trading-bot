@@ -45,6 +45,7 @@ export interface BotConfig {
   unitPrice: number;
   takeProfit: number;
   stopLoss: number;
+  useTrailingStop: boolean;
   buySlippage: number;
   sellSlippage: number;
   priceCheckInterval: number;
@@ -52,7 +53,8 @@ export interface BotConfig {
   filterCheckInterval: number;
   filterCheckDuration: number;
   consecutiveMatchCount: number;
-}
+  }
+
 
 export class Bot {
   private readonly poolFilters: PoolFilters;
@@ -65,6 +67,7 @@ export class Bot {
   private sellExecutionCount = 0;
   public readonly isWarp: boolean = false;
   public readonly isJito: boolean = false;
+  trailingStops: any;
 
   constructor(
     private readonly connection: Connection,
@@ -390,6 +393,58 @@ export class Bot {
     return false;
   }
 
+  private calculateStopLoss(currentPrice: TokenAmount): TokenAmount {
+    // Calculate stop loss as percentage of current price
+    const stopLossFraction = currentPrice.mul(this.config.stopLoss).numerator.div(new BN(100));
+    const stopLossAmount = new TokenAmount(this.config.quoteToken, stopLossFraction, true);
+    return currentPrice.subtract(stopLossAmount);
+  }
+
+  private initializeTrailingStop(mint: string, initialPrice: TokenAmount): void {
+    const initialStopLoss = this.calculateStopLoss(initialPrice);
+    this.trailingStops.set(mint, {
+      highestPrice: initialPrice,
+      currentStopLoss: initialStopLoss,
+    });
+    
+    logger.debug(
+      { 
+        mint,
+        initialPrice: initialPrice.toFixed(),
+        initialStopLoss: initialStopLoss.toFixed(),
+      },
+      'Initialized trailing stop'
+    );
+  }
+
+  private updateTrailingStop(mint: string, currentPrice: TokenAmount): void {
+    const trailingData = this.trailingStops.get(mint);
+    if (!trailingData) return;
+
+    // Only update if we have a new highest price
+    if (currentPrice.gt(trailingData.highestPrice)) {
+      const newStopLoss = this.calculateStopLoss(currentPrice);
+      
+      // Only update if the new stop loss is higher than current stop loss
+      if (newStopLoss.gt(trailingData.currentStopLoss)) {
+        trailingData.highestPrice = currentPrice;
+        trailingData.currentStopLoss = newStopLoss;
+        
+        logger.debug(
+          { 
+            mint,
+            highestPrice: currentPrice.toFixed(),
+            newStopLoss: newStopLoss.toFixed(),
+            priceIncrease: currentPrice.subtract(trailingData.highestPrice).toFixed(),
+            stopLossIncrease: newStopLoss.subtract(trailingData.currentStopLoss).toFixed()
+          },
+          'Updated trailing stop'
+        );
+      }
+    }
+  }
+
+
   private async priceMatch(amountIn: TokenAmount, poolKeys: LiquidityPoolKeysV4) {
     if (this.config.priceCheckDuration === 0 || this.config.priceCheckInterval === 0) {
       return;
@@ -399,12 +454,12 @@ export class Bot {
     const profitFraction = this.config.quoteAmount.mul(this.config.takeProfit).numerator.div(new BN(100));
     const profitAmount = new TokenAmount(this.config.quoteToken, profitFraction, true);
     const takeProfit = this.config.quoteAmount.add(profitAmount);
-
-    const lossFraction = this.config.quoteAmount.mul(this.config.stopLoss).numerator.div(new BN(100));
-    const lossAmount = new TokenAmount(this.config.quoteToken, lossFraction, true);
-    const stopLoss = this.config.quoteAmount.subtract(lossAmount);
+    
     const slippage = new Percent(this.config.sellSlippage, 100);
     let timesChecked = 0;
+
+    const mintString = poolKeys.baseMint.toString();
+    let firstCheck = true;
 
     do {
       try {
@@ -413,33 +468,114 @@ export class Bot {
           poolKeys,
         });
 
-        const amountOut = Liquidity.computeAmountOut({
+        const computedAmountOut = Liquidity.computeAmountOut({
           poolKeys,
           poolInfo,
           amountIn: amountIn,
           currencyOut: this.config.quoteToken,
           slippage,
-        }).amountOut;
+        });
 
-        logger.debug(
-          { mint: poolKeys.baseMint.toString() },
-          `Take profit: ${takeProfit.toFixed()} | Stop loss: ${stopLoss.toFixed()} | Current: ${amountOut.toFixed()}`,
+        const amountOut = new TokenAmount(
+          this.config.quoteToken,
+          computedAmountOut.amountOut.raw,
+          true
         );
 
-        if (amountOut.lt(stopLoss)) {
-          break;
+        if (this.config.useTrailingStop) {
+          if (firstCheck) {
+            this.initializeTrailingStop(mintString, amountOut);
+            firstCheck = false;
+          }
+
+          this.updateTrailingStop(mintString, amountOut);
+          const trailingData = this.trailingStops.get(mintString);
+
+          if (!trailingData) {
+            logger.error({ mint: mintString }, 'Trailing stop data not found');
+            break;
+          }
+
+          logger.debug(
+            { 
+              mint: mintString,
+              takeProfit: takeProfit.toFixed(),
+              trailingStop: trailingData.currentStopLoss.toFixed(),
+              currentPrice: amountOut.toFixed(),
+              highestPrice: trailingData.highestPrice.toFixed()
+            },
+            'Price check (Trailing Stop)'
+          );
+
+          if (amountOut.lt(trailingData.currentStopLoss)) {
+            const dropAmount = trailingData.highestPrice.subtract(amountOut);
+            const dropPercentage = dropAmount.mul(new BN(100)).div(trailingData.highestPrice.raw);
+            
+            logger.info(
+              { 
+                mint: mintString,
+                currentPrice: amountOut.toFixed(),
+                trailingStop: trailingData.currentStopLoss.toFixed(),
+                highestPrice: trailingData.highestPrice.toFixed(),
+                percentageDropFromHigh: `${dropPercentage.toString()}%`
+              },
+              'Trailing stop triggered'
+            );
+            break;
+          }
+        } else {
+          // Regular stop loss logic
+          const lossFraction = this.config.quoteAmount.mul(this.config.stopLoss).numerator.div(new BN(100));
+          const lossAmount = new TokenAmount(this.config.quoteToken, lossFraction, true);
+          const fixedStopLoss = this.config.quoteAmount.subtract(lossAmount);
+
+          logger.debug(
+            { 
+              mint: mintString,
+              takeProfit: takeProfit.toFixed(),
+              stopLoss: fixedStopLoss.toFixed(),
+              currentPrice: amountOut.toFixed()
+            },
+            'Price check (Regular Stop)'
+          );
+
+          if (amountOut.lt(fixedStopLoss)) {
+            logger.info(
+              { 
+                mint: mintString,
+                currentPrice: amountOut.toFixed(),
+                stopLoss: fixedStopLoss.toFixed()
+              },
+              'Stop loss triggered'
+            );
+            break;
+          }
         }
 
+        // Check take profit (same for both modes)
         if (amountOut.gt(takeProfit)) {
+          logger.info(
+            { 
+              mint: mintString,
+              currentPrice: amountOut.toFixed(),
+              takeProfit: takeProfit.toFixed()
+            },
+            'Take profit triggered'
+          );
           break;
         }
 
         await sleep(this.config.priceCheckInterval);
-      } catch (e) {
-        logger.trace({ mint: poolKeys.baseMint.toString(), e }, `Failed to check token price`);
+      } catch (e: any) {
+        logger.trace({ mint: mintString, e }, 'Failed to check token price');
       } finally {
         timesChecked++;
       }
     } while (timesChecked < timesToCheck);
+
+    // Clean up trailing stop data if it exists
+    if (this.config.useTrailingStop) {
+      this.trailingStops.delete(mintString);
+    }
   }
 }

@@ -35,6 +35,7 @@ import {
   CACHE_NEW_MARKETS,
   TAKE_PROFIT,
   STOP_LOSS,
+  TRAILING_STOP_LOSS,
   BUY_SLIPPAGE,
   SELL_SLIPPAGE,
   PRICE_CHECK_DURATION,
@@ -112,6 +113,7 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
   logger.info(`Price check duration: ${botConfig.priceCheckDuration} ms`);
   logger.info(`Take profit: ${botConfig.takeProfit}%`);
   logger.info(`Stop loss: ${botConfig.stopLoss}%`);
+  logger.info(`Trailing Stop loss: ${botConfig.useTrailingStop}`);
 
   logger.info('- Snipe list -');
   logger.info(`Snipe list: ${botConfig.useSnipeList}`);
@@ -183,6 +185,7 @@ const runListener = async () => {
     unitPrice: COMPUTE_UNIT_PRICE,
     takeProfit: TAKE_PROFIT,
     stopLoss: STOP_LOSS,
+    useTrailingStop: TRAILING_STOP_LOSS === 'true',
     buySlippage: BUY_SLIPPAGE,
     sellSlippage: SELL_SLIPPAGE,
     priceCheckInterval: PRICE_CHECK_INTERVAL,

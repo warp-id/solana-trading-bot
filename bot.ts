@@ -24,6 +24,11 @@ import BN from 'bn.js';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
 import { JitoTransactionExecutor } from './transactions/jito-rpc-transaction-executor';
 
+interface TrailingStopData {
+  highestPrice: TokenAmount;
+  currentStopLoss: TokenAmount;
+}
+
 export interface BotConfig {
   wallet: Keypair;
   checkRenounced: boolean;
@@ -67,7 +72,7 @@ export class Bot {
   private sellExecutionCount = 0;
   public readonly isWarp: boolean = false;
   public readonly isJito: boolean = false;
-  trailingStops: any;
+  private readonly trailingStops: Map<string, TrailingStopData> = new Map();
 
   constructor(
     private readonly connection: Connection,

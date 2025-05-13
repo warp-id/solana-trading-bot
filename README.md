@@ -45,7 +45,7 @@ You should see the following output:
   - This option should not be used with public RPC.
 - `TRANSACTION_EXECUTOR` - Set to `warp` to use warp infrastructure for executing transactions, or set it to jito to use JSON-RPC jito executer
   - For more details checkout [warp](#warp-transactions-beta) section
-- `CUSTOM_FEE` - If using warp or jito executors this value will be used for transaction fees instead of `COMPUTE_UNIT_LIMIT` and `COMPUTE_UNIT_LIMIT`
+- `CUSTOM_FEE` - If using warp or jito executors this value will be used for transaction fees instead of `COMPUTE_UNIT_LIMIT` and `COMPUTE_UNIT_PRICE`
   - Minimum value is 0.0001 SOL, but we recommend using 0.006 SOL or above
   - On top of this fee, minimal solana network fee will be applied
 

@@ -23,7 +23,7 @@ import { Mutex } from 'async-mutex';
 import BN from 'bn.js';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
 import { JitoTransactionExecutor } from './transactions/jito-rpc-transaction-executor';
-
+import fs from 'fs';
 export interface BotConfig {
   wallet: Keypair;
   checkRenounced: boolean;
@@ -52,6 +52,7 @@ export interface BotConfig {
   filterCheckInterval: number;
   filterCheckDuration: number;
   consecutiveMatchCount: number;
+  simulateTx: boolean;
 }
 
 export class Bot {
@@ -150,6 +151,7 @@ export class Bot {
             `Send buy transaction attempt: ${i + 1}/${this.config.maxBuyRetries}`,
           );
           const tokenOut = new Token(TOKEN_PROGRAM_ID, poolKeys.baseMint, poolKeys.baseDecimals);
+          console.log("detected at ", new Date().toISOString());
           const result = await this.swap(
             poolKeys,
             this.config.quoteAta,
@@ -160,9 +162,21 @@ export class Bot {
             this.config.buySlippage,
             this.config.wallet,
             'buy',
+            this.config.simulateTx,
           );
 
           if (result.confirmed) {
+            if (result.simulated) {
+              logger.info(
+                {
+                  mint: poolState.baseMint.toString(),
+                  signature: result.signature,
+                },
+                `Simulated buy tx`,
+              );
+              break;
+            }
+
             logger.info(
               {
                 mint: poolState.baseMint.toString(),
@@ -171,7 +185,6 @@ export class Bot {
               },
               `Confirmed buy tx`,
             );
-
             break;
           }
 
@@ -246,9 +259,14 @@ export class Bot {
             this.config.sellSlippage,
             this.config.wallet,
             'sell',
+            this.config.simulateTx,
           );
 
           if (result.confirmed) {
+            if (result.simulated) {
+              logger.info({ mint: rawAccount.mint.toString() }, 'Simulated sell tx');
+              break;
+            }
             logger.info(
               {
                 dex: `https://dexscreener.com/solana/${rawAccount.mint.toString()}?maker=${this.config.wallet.publicKey}`,
@@ -293,6 +311,7 @@ export class Bot {
     slippage: number,
     wallet: Keypair,
     direction: 'buy' | 'sell',
+    simulate: boolean
   ) {
     const slippagePercent = new Percent(slippage, 100);
     const poolInfo = await Liquidity.fetchInfo({
@@ -330,18 +349,18 @@ export class Bot {
         ...(this.isWarp || this.isJito
           ? []
           : [
-              ComputeBudgetProgram.setComputeUnitPrice({ microLamports: this.config.unitPrice }),
-              ComputeBudgetProgram.setComputeUnitLimit({ units: this.config.unitLimit }),
-            ]),
+            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: this.config.unitPrice }),
+            ComputeBudgetProgram.setComputeUnitLimit({ units: this.config.unitLimit }),
+          ]),
         ...(direction === 'buy'
           ? [
-              createAssociatedTokenAccountIdempotentInstruction(
-                wallet.publicKey,
-                ataOut,
-                wallet.publicKey,
-                tokenOut.mint,
-              ),
-            ]
+            createAssociatedTokenAccountIdempotentInstruction(
+              wallet.publicKey,
+              ataOut,
+              wallet.publicKey,
+              tokenOut.mint,
+            ),
+          ]
           : []),
         ...innerTransaction.instructions,
         ...(direction === 'sell' ? [createCloseAccountInstruction(ataIn, wallet.publicKey, wallet.publicKey)] : []),
@@ -351,7 +370,54 @@ export class Bot {
     const transaction = new VersionedTransaction(messageV0);
     transaction.sign([wallet, ...innerTransaction.signers]);
 
-    return this.txExecutor.executeAndConfirm(transaction, wallet, latestBlockhash);
+    if (simulate) {
+      const simulation = await this.connection.simulateTransaction(transaction, { sigVerify: true });
+      return {
+        confirmed: simulation.value.err === null,
+        simulated: true,
+        signature: undefined,
+        error: simulation.value.err ? JSON.stringify(simulation.value.err) : undefined,
+      };
+    }
+
+    const txResult = await this.txExecutor.executeAndConfirm(transaction, wallet, latestBlockhash);
+
+    if (txResult.confirmed) {
+      try {
+        // History must never turn a confirmed trade into a retry.
+        const balance = direction === 'buy'
+          ? await this.connection.getTokenAccountBalance(ataOut)
+          : null;
+        const historyDir = 'history';
+        fs.mkdirSync(historyDir, { recursive: true });
+        const historyFile = `${historyDir}/${wallet.publicKey.toBase58()}.json`;
+        const history = fs.existsSync(historyFile) ? JSON.parse(fs.readFileSync(historyFile, 'utf8')) : [];
+        if (direction === 'buy') {
+          const mintBalance = new TokenAmount(tokenOut, balance!.value.amount, true);
+          history.push({
+            mint: tokenOut.mint.toString(),
+            buySignature: txResult.signature,
+            buyAmountIn: amountIn.toFixed(),
+            computedAmountOut: computedAmountOut.amountOut.toFixed(),
+            computedBuyPrice: Number(amountIn.toFixed()) / Number(computedAmountOut.amountOut.toFixed()),
+            buyTime: new Date().toISOString(),
+            mintBalance: mintBalance.toFixed(),
+            buyPrice: mintBalance.raw.isZero() ? null : (Number(amountIn.toFixed()) / Number(mintBalance.toFixed())).toFixed(30),
+          });
+        } else {
+          const sellData = [...history].reverse().find((data: { mint: string; sellTx?: string }) => data.mint === tokenIn.mint.toString() && !data.sellTx);
+          if (sellData) {
+            sellData.sellTx = txResult.signature;
+            sellData.dex = `https://dexscreener.com/solana/${tokenIn.mint.toString()}?maker=${wallet.publicKey}`;
+          }
+        }
+        fs.writeFileSync(`${historyFile}.tmp`, JSON.stringify(history, null, 4));
+        fs.renameSync(`${historyFile}.tmp`, historyFile);
+      } catch (error) {
+        logger.error({ error, signature: txResult.signature }, 'Confirmed trade could not be recorded in local history');
+      }
+    }
+    return { ...txResult, simulated: false };
   }
 
   private async filterMatch(poolKeys: LiquidityPoolKeysV4) {

@@ -45,6 +45,7 @@ import {
   FILTER_CHECK_INTERVAL,
   FILTER_CHECK_DURATION,
   CONSECUTIVE_FILTER_MATCHES,
+  SIMULATE_TX
 } from './helpers';
 import { version } from './package.json';
 import { WarpTransactionExecutor } from './transactions/warp-transaction-executor';
@@ -81,6 +82,7 @@ function printDetails(wallet: Keypair, quoteToken: Token, bot: Bot) {
 
   logger.info('- Bot -');
 
+  logger.info(`Simulate transactions: ${SIMULATE_TX}`);
   logger.info(
     `Using ${TRANSACTION_EXECUTOR} executer: ${bot.isWarp || bot.isJito || (TRANSACTION_EXECUTOR === 'default' ? true : false)}`,
   );
@@ -154,10 +156,12 @@ const runListener = async () => {
       txExecutor = new JitoTransactionExecutor(CUSTOM_FEE, connection);
       break;
     }
-    default: {
+    case 'default': {
       txExecutor = new DefaultTransactionExecutor(connection);
       break;
     }
+    default:
+      throw new Error(`Unsupported transaction executor: ${TRANSACTION_EXECUTOR}`);
   }
 
   const wallet = getWallet(PRIVATE_KEY.trim());
@@ -190,6 +194,7 @@ const runListener = async () => {
     filterCheckInterval: FILTER_CHECK_INTERVAL,
     filterCheckDuration: FILTER_CHECK_DURATION,
     consecutiveMatchCount: CONSECUTIVE_FILTER_MATCHES,
+    simulateTx: SIMULATE_TX
   };
 
   const bot = new Bot(connection, marketCache, poolCache, txExecutor, botConfig);

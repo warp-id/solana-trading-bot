@@ -5,7 +5,9 @@
   "version": "2.0.1",
   "scripts": {
     "start": "ts-node index.ts",
-    "tsc": "tsc --noEmit"
+    "tsc": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@metaplex-foundation/mpl-token-metadata": "^3.2.1",
@@ -30,6 +32,8 @@
     "@types/bn.js": "^5.1.5",
     "prettier": "^3.2.4",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "3.1.4",
+    "@vitest/coverage-v8": "3.1.4"
   }
 }
